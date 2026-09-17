@@ -41,12 +41,46 @@ Chrome.FONT     = "Fonts\\FRIZQT__.TTF"
 local C = Chrome.Colors
 
 -- ============================================================
+-- Palette registry
+-- ============================================================
+-- Every region Chrome paints with a palette token is remembered (weakly)
+-- with the token's name, so a theme switch can re-tint it in place. A
+-- color table that is not one of the tokens is a one-off and is left alone.
+local TOKEN_OF = {}
+for name, tbl in pairs(Chrome.Colors) do TOKEN_OF[tbl] = name end
+local tinted = setmetatable({}, { __mode = "k" })
+
+-- Register a region a product painted itself. kind: "texture" or "text".
+function Chrome:Register(region, token, kind)
+    if type(token) == "table" then token = TOKEN_OF[token] end
+    if not token or not C[token] then return region end
+    tinted[region] = { token = token, kind = kind or "texture" }
+    return region
+end
+
+function Chrome:Retint()
+    for region, info in pairs(tinted) do
+        local c = C[info.token]
+        if c then
+            if info.kind == "text" then
+                if region.SetTextColor then region:SetTextColor(c[1], c[2], c[3], c[4] or 1) end
+            elseif region.SetColorTexture then
+                region:SetColorTexture(c[1], c[2], c[3], c[4] or 1)
+            end
+        end
+    end
+end
+
+-- ============================================================
 -- Primitives
 -- ============================================================
 
 function Chrome:Texture(parent, layer, color)
     local t = parent:CreateTexture(nil, layer or "BACKGROUND")
-    if color then t:SetColorTexture(color[1], color[2], color[3], color[4] or 1) end
+    if color then
+        t:SetColorTexture(color[1], color[2], color[3], color[4] or 1)
+        if TOKEN_OF[color] then tinted[t] = { token = TOKEN_OF[color], kind = "texture" } end
+    end
     return t
 end
 
@@ -55,6 +89,7 @@ function Chrome:Text(parent, size, color, flags)
     fs:SetFont(self.FONT, size or 12, flags or "")
     color = color or C.text
     fs:SetTextColor(color[1], color[2], color[3], color[4] or 1)
+    if TOKEN_OF[color] then tinted[fs] = { token = TOKEN_OF[color], kind = "text" } end
     return fs
 end
 
@@ -76,12 +111,10 @@ function Chrome:AddBrackets(parent, resizeButton, color)
     parent.brackets = {}
     for _, point in ipairs({ "TOPLEFT", "TOPRIGHT", "BOTTOMLEFT", "BOTTOMRIGHT" }) do
         local host = (point == "BOTTOMRIGHT" and resizeButton) or parent
-        local h = host:CreateTexture(nil, "OVERLAY")
-        h:SetColorTexture(color[1], color[2], color[3], color[4] or 1)
+        local h = self:Texture(host, "OVERLAY", color)
         h:SetPoint(point, host, point, 0, 0)
         h:SetSize(B, 2)
-        local v = host:CreateTexture(nil, "OVERLAY")
-        v:SetColorTexture(color[1], color[2], color[3], color[4] or 1)
+        local v = self:Texture(host, "OVERLAY", color)
         v:SetPoint(point, host, point, 0, 0)
         v:SetSize(2, B)
         parent.brackets[point] = { h, v }

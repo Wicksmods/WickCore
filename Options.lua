@@ -51,6 +51,9 @@ local function ensureRoot()
                 y = y - 18
             end
         end
+        y = y - 12
+        Options:ThemeSection(f, 16, y)
+
         local client = Chrome:Text(f, 11, Chrome.Colors.muted)
         client:SetPoint("BOTTOMLEFT", 16, 16)
         client:SetText(table.concat(Core.Client:Report(), "  |  "))
@@ -65,6 +68,77 @@ local function ensureRoot()
     end
     Options.root = root
     return root
+end
+
+-- Theme picker: one swatch per theme, the active one bracketed in its own
+-- accent, plus a check to follow the player's class.
+function Options:ThemeSection(parent, x, y)
+    local C = Chrome.Colors
+    local head = Chrome:Heading(parent, "Theme")
+    head:SetPoint("TOPLEFT", x, y)
+    y = y - 22
+    local swatches = {}
+    local function refresh()
+        local setting = Chrome:ThemeSetting()
+        for _, sw in ipairs(swatches) do
+            local on = sw.theme.id == Chrome.activeTheme
+            sw.ring:SetShown(on)
+            sw.label:SetTextColor(on and C.fel[1] or C.muted[1], on and C.fel[2] or C.muted[2], on and C.fel[3] or C.muted[3], 1)
+        end
+        if parent.themeAuto then parent.themeAuto.Refresh() end
+        if parent.themeNote then
+            local t = Chrome.ThemeByID[Chrome.activeTheme]
+            parent.themeNote:SetText(setting == "auto" and ("Following your class: " .. (t and t.name or "?"))
+                or ((t and t.name or "?") .. (t and t.class and (" is the " .. t.class:sub(1, 1) .. t.class:sub(2):lower() .. " theme.") or "")))
+        end
+    end
+    local SW = 56
+    for i, t in ipairs(Chrome.Themes) do
+        local b = CreateFrame("Button", nil, parent)
+        b:SetSize(SW, 40)
+        b:SetPoint("TOPLEFT", x + (i - 1) * (SW + 6), y)
+        local bg = b:CreateTexture(nil, "BACKGROUND")
+        bg:SetColorTexture(t.colors.void[1], t.colors.void[2], t.colors.void[3], 1)
+        bg:SetPoint("TOPLEFT", 0, 0); bg:SetPoint("BOTTOMRIGHT", 0, 14)
+        local strip = b:CreateTexture(nil, "ARTWORK")
+        strip:SetColorTexture(t.colors.shadow[1], t.colors.shadow[2], t.colors.shadow[3], 1)
+        strip:SetPoint("TOPLEFT", 1, -1); strip:SetPoint("TOPRIGHT", -1, -1); strip:SetHeight(7)
+        local acc = b:CreateTexture(nil, "OVERLAY")
+        acc:SetColorTexture(t.colors.fel[1], t.colors.fel[2], t.colors.fel[3], 1)
+        acc:SetPoint("BOTTOMLEFT", bg, "BOTTOMLEFT", 4, 4); acc:SetSize(SW - 8, 3)
+        local edge = b:CreateTexture(nil, "BORDER")
+        edge:SetColorTexture(t.colors.border[1], t.colors.border[2], t.colors.border[3], 1)
+        edge:SetPoint("BOTTOMLEFT", bg, "BOTTOMLEFT", 0, 0); edge:SetPoint("BOTTOMRIGHT", bg, "BOTTOMRIGHT", 0, 0); edge:SetHeight(1)
+        local ring = b:CreateTexture(nil, "OVERLAY")
+        ring:SetColorTexture(t.colors.fel[1], t.colors.fel[2], t.colors.fel[3], 1)
+        ring:SetPoint("TOPLEFT", bg, "TOPLEFT", 0, 0); ring:SetPoint("TOPRIGHT", bg, "TOPRIGHT", 0, 0); ring:SetHeight(2)
+        ring:Hide()
+        b.ring = ring
+        b.label = Chrome:Text(b, 10, C.muted)
+        b.label:SetPoint("BOTTOM", 0, 0)
+        b.label:SetText(t.name)
+        b.theme = t
+        b:SetScript("OnClick", function() Chrome:SetTheme(t.id); refresh() end)
+        b:SetScript("OnEnter", function()
+            GameTooltip:SetOwner(b, "ANCHOR_RIGHT")
+            GameTooltip:SetText(t.name, 1, 1, 1)
+            if t.class then GameTooltip:AddLine(t.class:sub(1, 1) .. t.class:sub(2):lower() .. " theme", 0.6, 0.6, 0.6) end
+            GameTooltip:Show()
+        end)
+        b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        swatches[#swatches + 1] = b
+    end
+    y = y - 46
+    parent.themeAuto = Chrome:Check(parent, "Follow my class",
+        function() return Chrome:ThemeSetting() == "auto" end,
+        function(v) Chrome:SetTheme(v and "auto" or Chrome.activeTheme); refresh() end)
+    parent.themeAuto:SetPoint("TOPLEFT", x, y)
+    parent.themeNote = Chrome:Text(parent, 10, C.muted)
+    parent.themeNote:SetPoint("LEFT", parent.themeAuto, "RIGHT", 20, 0)
+    y = y - 22
+    refresh()
+    Chrome:OnThemeChanged(refresh)
+    return y
 end
 
 -- Register a page for an addon. buildFn(page, addon) runs on first show.

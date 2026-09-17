@@ -14,7 +14,7 @@ if not Core then return end
 
 Core._sourceAddon = ADDON
 Core.MAJOR, Core.MINOR = MAJOR, MINOR
-Core.VERSION = "0.2.0"
+Core.VERSION = "0.3.0"
 _G.WickCore = Core
 
 -- Persist across a same-session upgrade of the library.
@@ -247,12 +247,14 @@ Core.self = Core:NewAddon("WickCore", {
         global = {
             minimap = { angle = 220, hidden = false },
             debug   = false,
+            theme   = "fel",     -- a theme id, or "auto" for the class theme
         },
     },
 })
 
 function Core.self:OnInitialize()
     Core.debug = self.db.global.debug and true or false
+    if Core.Chrome and Core.Chrome.ApplySavedTheme then Core.Chrome:ApplySavedTheme(self.db.global) end
 end
 
 function Core.self:OnEnable()
@@ -270,10 +272,26 @@ function Core.self:OnEnable()
             end
         elseif msg == "options" then
             self:OpenOptions()
+        elseif msg:match("^theme") then
+            local want = msg:match("^theme%s+(%S+)")
+            local Chrome = Core.Chrome
+            if not want or want == "list" then
+                local names = {}
+                for _, t in ipairs(Chrome.Themes) do
+                    names[#names + 1] = (t.id == Chrome.activeTheme and "|cff" .. t.hex.fel .. t.id .. "|r" or t.id)
+                end
+                self:Print("theme: " .. tostring(Chrome:ThemeSetting()) .. " (" .. Chrome.activeTheme .. "). Use /wickcore theme <id|auto>.")
+                self:Print("themes: " .. table.concat(names, " "))
+            elseif want == "auto" or want == "class" or Chrome.ThemeByID[want] then
+                local t = Chrome:SetTheme(want)
+                self:Print("theme set to " .. t.name .. (want == "auto" and " (following your class)" or ""))
+            else
+                self:Print("unknown theme '" .. want .. "'. /wickcore theme list")
+            end
         else
             for _, line in ipairs(Core.Client:Report()) do self:Print(line) end
             self:Print("restrictions: " .. Core.Restrict:Summary())
-            self:Print("/wickcore dialect | addons | options | debug")
+            self:Print("/wickcore dialect | addons | options | theme | debug")
         end
     end, "/wickcore", "/wc")
 

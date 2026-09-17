@@ -1,5 +1,21 @@
 # WickCore - Changelog
 
+## 0.3.0 - 2026-09-17
+
+### Themes
+
+The chrome keeps its shape and swaps its five colors. Fel stays the brand
+default; the other eight themes are one per Forever class.
+
+- Chrome.Themes: Fel (warlock), Storm (shaman), Wild (druid), Quiver (hunter),
+  Arcane (mage), Holy (priest), Light (paladin), Shadow (rogue), Iron (warrior)
+- Chrome:SetTheme(id) mutates Chrome.Colors in place and re-tints every
+  region Chrome painted with a palette token, live, no reload
+- "auto" follows the player's class; the choice is saved account-wide in WickCoreDB
+- Theme picker with swatches on the Wick's Mods options page; /wickcore theme
+- Chrome:Register(region, token, kind) for regions products paint themselves
+- Chat prefix and two-tone title colors follow the theme
+
 ## 0.1.0 - 2026-09-17
 
 ### Scaffold
