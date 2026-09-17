@@ -38,9 +38,18 @@ local CLASS_HEX = {
     WARRIOR = "C69B6D", PALADIN = "F48CBA", HUNTER = "AAD372", ROGUE = "FFF468", PRIEST = "FFFFFF",
     SHAMAN = "0070DD", MAGE = "3FC7EB", WARLOCK = "8788EE", DRUID = "FF7C0A",
 }
+-- The Classic-era set, the one TBC and its class-colored UIs still show.
+local CLASSIC_HEX = {
+    WARRIOR = "C79C6E", PALADIN = "F58CBA", HUNTER = "ABD473", ROGUE = "FFF569", PRIEST = "FFFFFF",
+    SHAMAN = "0070DE", MAGE = "69CCF0", WARLOCK = "9482C9", DRUID = "FF7D0A",
+}
 local CLASS_ORDER = { "SHAMAN", "DRUID", "HUNTER", "MAGE", "PRIEST", "PALADIN", "ROGUE", "WARRIOR" }
 
+-- "client" reads the game's table; "classic" uses the Classic-era codes.
+Chrome.classColorSet = "client"
+
 local function classAccent(token)
+    if Chrome.classColorSet == "classic" then return rgb(CLASSIC_HEX[token] or CLASS_HEX[token]) end
     if C_ClassColor and C_ClassColor.GetClassColor then
         local ok, col = pcall(C_ClassColor.GetClassColor, token)
         if ok and col and col.r then return { col.r, col.g, col.b, 1 } end
@@ -152,6 +161,16 @@ function Chrome:SetTheme(setting)
     return self:ApplyTheme(id)
 end
 
+-- Switch the class color source and rebuild the class themes on the spot.
+function Chrome:SetClassColorSet(which)
+    which = which == "classic" and "classic" or "client"
+    self.classColorSet = which
+    local db = Core.self and Core.self.db and Core.self.db.global
+    if db then db.classColors = which end
+    self:RebuildThemes()
+    return which
+end
+
 function Chrome:ThemeSetting()
     local db = Core.self and Core.self.db and Core.self.db.global
     return db and db.theme or self.DEFAULT_THEME
@@ -164,5 +183,9 @@ function Chrome:ApplySavedTheme(global)
     local legacy = { storm = "shaman", wild = "druid", quiver = "hunter", arcane = "mage",
                      holy = "priest", light = "paladin", shadow = "rogue", iron = "warrior" }
     if legacy[setting] then setting = legacy[setting]; if global then global.theme = setting end end
+    if global and global.classColors == "classic" then
+        self.classColorSet = "classic"
+        buildThemes()
+    end
     self:ApplyTheme(self:ResolveTheme(setting))
 end

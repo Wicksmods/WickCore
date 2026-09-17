@@ -136,6 +136,12 @@ function Options:ThemeSection(parent, x, y)
     parent.themeNote = Chrome:Text(parent, 10, C.muted)
     parent.themeNote:SetPoint("LEFT", parent.themeAuto, "RIGHT", 20, 0)
     y = y - 22
+    parent.themeClassic = Chrome:Check(parent, "Classic-era class colors (the set TBC UIs show)",
+        function() return Chrome.classColorSet == "classic" end,
+        function(v) Chrome:SetClassColorSet(v and "classic" or "client"); refresh() end)
+    parent.themeClassic:SetPoint("TOPLEFT", x, y)
+    parent.themeClassic:SetWidth(360)
+    y = y - 22
     refresh()
     Chrome:OnThemeChanged(refresh)
     return y

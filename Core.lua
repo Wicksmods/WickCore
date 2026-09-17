@@ -248,6 +248,7 @@ Core.self = Core:NewAddon("WickCore", {
             minimap = { angle = 220, hidden = false },
             debug   = false,
             theme   = "fel",     -- a theme id, or "auto" for the class theme
+            classColors = "client",  -- "client" or "classic" for the TBC-era codes
         },
     },
 })
@@ -286,8 +287,11 @@ function Core.self:OnEnable()
                 for _, t in ipairs(Chrome.Themes) do
                     names[#names + 1] = (t.id == Chrome.activeTheme and "|cff" .. t.hex.fel .. t.id .. "|r" or t.id)
                 end
-                self:Print("theme: " .. tostring(Chrome:ThemeSetting()) .. " (" .. Chrome.activeTheme .. "). Use /wickcore theme <id|auto>.")
+                self:Print("theme: " .. tostring(Chrome:ThemeSetting()) .. " (" .. Chrome.activeTheme .. "), class colors: " .. Chrome.classColorSet .. ". Use /wickcore theme <id|auto|classic|client|dump>.")
                 self:Print("themes: " .. table.concat(names, " "))
+            elseif want == "classic" or want == "client" then
+                Chrome:SetClassColorSet(want)
+                self:Print("class colors: " .. (want == "classic" and "Classic-era set (as TBC UIs show them)" or "this client's set"))
             elseif want == "auto" or want == "class" or Chrome.ThemeByID[want] then
                 local t = Chrome:SetTheme(want)
                 self:Print("theme set to " .. t.name .. (want == "auto" and " (following your class)" or ""))
