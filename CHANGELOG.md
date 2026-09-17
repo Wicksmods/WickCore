@@ -7,8 +7,10 @@
 The chrome keeps its shape and swaps its five colors. Fel stays the brand
 default; the other eight themes are one per Forever class.
 
-- Chrome.Themes: Fel (warlock), Storm (shaman), Wild (druid), Quiver (hunter),
-  Arcane (mage), Holy (priest), Light (paladin), Shadow (rogue), Iron (warrior)
+- Chrome.Themes: Fel (the brand, and the warlock theme) plus one theme per
+  other class. Class themes take their accent from the client's class color
+  table and derive void, shadow, border and text from it, so they match the
+  colors the game itself uses for each class
 - Chrome:SetTheme(id) mutates Chrome.Colors in place and re-tints every
   region Chrome painted with a palette token, live, no reload
 - "auto" follows the player's class; the choice is saved account-wide in WickCoreDB

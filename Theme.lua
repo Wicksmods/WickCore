@@ -3,9 +3,11 @@
 --
 -- The chrome never changes shape: flat panels, one 1px border, L-bracket
 -- corners, two-tone titles. What a theme changes is the five colors those
--- are drawn in. Fel is the brand and the default; the other themes are one
--- per class, so a shaman can sit in storm blue and a paladin in gold while
--- every panel still reads as Wick.
+-- are drawn in. Fel is the brand and the default; it is also the warlock
+-- theme. The other eight themes take their accent from the client's own
+-- class color table (RAID_CLASS_COLORS, C_ClassColor on retail) so they
+-- match what the game paints in raid frames and chat, and derive their
+-- darks from that accent so each one reads as its class.
 --
 -- Chrome.Colors is mutated in place so every reference a product holds
 -- follows the switch, and every region Chrome created with a palette token
@@ -19,46 +21,89 @@ local Chrome = Core.Chrome
 local C = Chrome.Colors
 
 local function rgb(hex, a)
-    local r = tonumber(hex:sub(1, 2), 16) / 255
-    local g = tonumber(hex:sub(3, 4), 16) / 255
-    local b = tonumber(hex:sub(5, 6), 16) / 255
-    return { r, g, b, a or 1 }
+    return { tonumber(hex:sub(1, 2), 16) / 255, tonumber(hex:sub(3, 4), 16) / 255, tonumber(hex:sub(5, 6), 16) / 255, a or 1 }
+end
+local function hex(c)
+    return ("%02X%02X%02X"):format(math.floor(c[1] * 255 + 0.5), math.floor(c[2] * 255 + 0.5), math.floor(c[3] * 255 + 0.5))
+end
+local function mix(a, b, t)
+    return { a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, a[3] + (b[3] - a[3]) * t, 1 }
 end
 
--- accent / void / shadow / border / text, as hex.
-local DEFS = {
-    { id = "fel",     name = "Fel",     class = "WARLOCK", accent = "4FC778", void = "0D0A14", shadow = "171124", border = "383058", text = "D4C8A1" },
-    { id = "storm",   name = "Storm",   class = "SHAMAN",  accent = "4FA8E8", void = "0A0F16", shadow = "12202C", border = "2A4A62", text = "CFD8E0" },
-    { id = "wild",    name = "Wild",    class = "DRUID",   accent = "E8A33C", void = "0C0F0A", shadow = "161D12", border = "35482B", text = "D9CFA8" },
-    { id = "quiver",  name = "Quiver",  class = "HUNTER",  accent = "D2A85A", void = "0E0C09", shadow = "1C1710", border = "4A3C24", text = "E0D4B0" },
-    { id = "arcane",  name = "Arcane",  class = "MAGE",    accent = "6FC8F0", void = "0A0A18", shadow = "141432", border = "2E2E6A", text = "D4D6E8" },
-    { id = "holy",    name = "Holy",    class = "PRIEST",  accent = "F2E2A0", void = "0F0E14", shadow = "1D1B26", border = "4A4560", text = "ECE6D6" },
-    { id = "light",   name = "Light",   class = "PALADIN", accent = "F5C242", void = "110E0C", shadow = "201915", border = "553F2E", text = "E8DCC4" },
-    { id = "shadow",  name = "Shadow",  class = "ROGUE",   accent = "E6D24A", void = "0A0A0B", shadow = "151517", border = "3A3A40", text = "D8D4CC" },
-    { id = "iron",    name = "Iron",    class = "WARRIOR", accent = "C79C6E", void = "100B0A", shadow = "1E1412", border = "522F2A", text = "E0D0C0" },
-}
+-- The brand palette, verbatim. Never derived.
+local FEL = { fel = "4FC778", void = "0D0A14", shadow = "171124", border = "383058", text = "D4C8A1" }
 
-Chrome.Themes = {}       -- ordered, as above
-Chrome.ThemeByID = {}
-Chrome.ThemeByClass = {}
-for _, d in ipairs(DEFS) do
-    local t = {
-        id = d.id, name = d.name, class = d.class,
-        hex = { fel = d.accent, void = d.void, shadow = d.shadow, border = d.border, text = d.text },
-        colors = {
-            fel    = rgb(d.accent),
-            void   = rgb(d.void),
-            shadow = rgb(d.shadow),
-            border = rgb(d.border),
-            text   = rgb(d.text),
-        },
+-- Blizzard's class colors, as a fallback when the client table is absent.
+local CLASS_HEX = {
+    WARRIOR = "C69B6D", PALADIN = "F48CBA", HUNTER = "AAD372", ROGUE = "FFF468", PRIEST = "FFFFFF",
+    SHAMAN = "0070DD", MAGE = "3FC7EB", WARLOCK = "8788EE", DRUID = "FF7C0A",
+}
+local CLASS_ORDER = { "SHAMAN", "DRUID", "HUNTER", "MAGE", "PRIEST", "PALADIN", "ROGUE", "WARRIOR" }
+
+local function classAccent(token)
+    if C_ClassColor and C_ClassColor.GetClassColor then
+        local ok, col = pcall(C_ClassColor.GetClassColor, token)
+        if ok and col and col.r then return { col.r, col.g, col.b, 1 } end
+    end
+    local t = rawget(_G, "RAID_CLASS_COLORS")
+    if t and t[token] and t[token].r then return { t[token].r, t[token].g, t[token].b, 1 } end
+    return rgb(CLASS_HEX[token] or FEL.fel)
+end
+
+-- Darks and text from an accent. The brand's own void/shadow/border/text
+-- are the bases; each is pulled a little toward the accent so the whole
+-- panel carries the class hue, not just its lines. Very bright accents
+-- (priest, rogue) would wash the darks out, so their pull is scaled by how
+-- far the accent sits from white.
+local BASE = { void = rgb(FEL.void), shadow = rgb(FEL.shadow), border = rgb(FEL.border), text = rgb(FEL.text) }
+local function derive(accent)
+    local lum = 0.2126 * accent[1] + 0.7152 * accent[2] + 0.0722 * accent[3]
+    local pull = lum > 0.8 and 0.45 or 1
+    return {
+        fel    = { accent[1], accent[2], accent[3], 1 },
+        void   = mix(BASE.void,   accent, 0.10 * pull),
+        shadow = mix(BASE.shadow, accent, 0.16 * pull),
+        border = mix(BASE.border, accent, 0.38 * pull),
+        text   = mix(BASE.text,   accent, 0.14 * pull),
     }
-    -- Muted sits two thirds of the way from the void to the text.
+end
+
+local function finish(t)
     local v, x = t.colors.void, t.colors.text
     t.colors.muted = { x[1] * 0.67 + v[1] * 0.33, x[2] * 0.67 + v[2] * 0.33, x[3] * 0.67 + v[3] * 0.33, 1 }
+    t.hex = {}
+    for k, c in pairs(t.colors) do if k ~= "muted" then t.hex[k] = hex(c) end end
+    return t
+end
+
+Chrome.Themes = {}
+Chrome.ThemeByID = {}
+Chrome.ThemeByClass = {}
+
+local function add(t)
+    finish(t)
     Chrome.Themes[#Chrome.Themes + 1] = t
     Chrome.ThemeByID[t.id] = t
-    Chrome.ThemeByClass[t.class] = t
+    if t.class then Chrome.ThemeByClass[t.class] = t end
+end
+
+local function buildThemes()
+    Chrome.Themes, Chrome.ThemeByID, Chrome.ThemeByClass = {}, {}, {}
+    add({ id = "fel", name = "Fel", class = "WARLOCK", brand = true,
+          colors = { fel = rgb(FEL.fel), void = rgb(FEL.void), shadow = rgb(FEL.shadow), border = rgb(FEL.border), text = rgb(FEL.text) } })
+    for _, token in ipairs(CLASS_ORDER) do
+        local name = token:sub(1, 1) .. token:sub(2):lower()
+        add({ id = token:lower(), name = name, class = token, colors = derive(classAccent(token)) })
+    end
+end
+buildThemes()
+
+-- Classic class-color addons rewrite RAID_CLASS_COLORS at login; rebuild
+-- then so the themes follow, and reapply the active one.
+function Chrome:RebuildThemes()
+    local active = self.activeTheme
+    buildThemes()
+    if active and self.ThemeByID[active] then self:ApplyTheme(active) end
 end
 
 Chrome.DEFAULT_THEME = "fel"
@@ -117,5 +162,9 @@ end
 -- Called by WickCore's own OnInitialize, before any product builds a frame.
 function Chrome:ApplySavedTheme(global)
     local setting = global and global.theme or self.DEFAULT_THEME
+    -- Old saved ids from the first cut map onto the class ids.
+    local legacy = { storm = "shaman", wild = "druid", quiver = "hunter", arcane = "mage",
+                     holy = "priest", light = "paladin", shadow = "rogue", iron = "warrior" }
+    if legacy[setting] then setting = legacy[setting]; if global then global.theme = setting end end
     self:ApplyTheme(self:ResolveTheme(setting))
 end
