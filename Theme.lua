@@ -6,8 +6,8 @@
 -- are drawn in. Fel is the brand and the default; it is also the warlock
 -- theme. The other eight themes take their accent from the client's own
 -- class color table (RAID_CLASS_COLORS, C_ClassColor on retail) so they
--- match what the game paints in raid frames and chat, and derive their
--- darks from that accent so each one reads as its class.
+-- match what the game paints in raid frames and chat, over neutral darks
+-- so the class color is the only hue on the panel.
 --
 -- Chrome.Colors is mutated in place so every reference a product holds
 -- follows the switch, and every region Chrome created with a palette token
@@ -50,21 +50,19 @@ local function classAccent(token)
     return rgb(CLASS_HEX[token] or FEL.fel)
 end
 
--- Darks and text from an accent. The brand's own void/shadow/border/text
--- are the bases; each is pulled a little toward the accent so the whole
--- panel carries the class hue, not just its lines. Very bright accents
--- (priest, rogue) would wash the darks out, so their pull is scaled by how
--- far the accent sits from white.
-local BASE = { void = rgb(FEL.void), shadow = rgb(FEL.shadow), border = rgb(FEL.border), text = rgb(FEL.text) }
+-- Class themes follow the convention class-colored UIs settled on: the
+-- accent is the exact class color and everything behind it is neutral
+-- near-black, so the color reads as the class instead of tinting the
+-- panel. Text stays the brand off-white. Only the border picks up a trace
+-- of the accent so the frame edge belongs to the theme.
+local NEUTRAL = { void = rgb("0B0B0D"), shadow = rgb("15151A"), border = rgb("2A2A31"), text = rgb(FEL.text) }
 local function derive(accent)
-    local lum = 0.2126 * accent[1] + 0.7152 * accent[2] + 0.0722 * accent[3]
-    local pull = lum > 0.8 and 0.45 or 1
     return {
         fel    = { accent[1], accent[2], accent[3], 1 },
-        void   = mix(BASE.void,   accent, 0.10 * pull),
-        shadow = mix(BASE.shadow, accent, 0.16 * pull),
-        border = mix(BASE.border, accent, 0.38 * pull),
-        text   = mix(BASE.text,   accent, 0.14 * pull),
+        void   = { NEUTRAL.void[1], NEUTRAL.void[2], NEUTRAL.void[3], 1 },
+        shadow = { NEUTRAL.shadow[1], NEUTRAL.shadow[2], NEUTRAL.shadow[3], 1 },
+        border = mix(NEUTRAL.border, accent, 0.22),
+        text   = { NEUTRAL.text[1], NEUTRAL.text[2], NEUTRAL.text[3], 1 },
     }
 end
 

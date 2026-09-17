@@ -275,7 +275,13 @@ function Core.self:OnEnable()
         elseif msg:match("^theme") then
             local want = msg:match("^theme%s+(%S+)")
             local Chrome = Core.Chrome
-            if not want or want == "list" then
+            if want == "dump" then
+                -- The class colors this client reports, for comparing against other UIs.
+                for _, t in ipairs(Chrome.Themes) do
+                    self:Print(("%-8s accent %s  void %s  shadow %s  border %s  text %s"):format(
+                        t.id, "|cff" .. t.hex.fel .. t.hex.fel .. "|r", t.hex.void, t.hex.shadow, t.hex.border, t.hex.text))
+                end
+            elseif not want or want == "list" then
                 local names = {}
                 for _, t in ipairs(Chrome.Themes) do
                     names[#names + 1] = (t.id == Chrome.activeTheme and "|cff" .. t.hex.fel .. t.id .. "|r" or t.id)
