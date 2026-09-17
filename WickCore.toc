@@ -1,0 +1,21 @@
+## Interface: 16001
+## Title: |cffD4C8A1Wick|r|cff4FC778Core|r
+## Notes: Shared platform for the Wick suite. Brand chrome, profiles, one options panel, client dialect shim, restriction guard, launcher, localization, version broadcast.
+## Author: Wick
+## Version: 0.1.0
+## SavedVariables: WickCoreDB
+## X-Category: Library
+## X-Website: https://wicksmods.com
+## X-License: MIT with trademark carve-out
+
+LibStub.lua
+Core.lua
+Client.lua
+Restrict.lua
+Dialect.lua
+Locale.lua
+Chrome.lua
+Profiles.lua
+Options.lua
+Launcher.lua
+Version.lua
