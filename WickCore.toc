@@ -2,7 +2,7 @@
 ## Title: |cffD4C8A1Wick|r|cff4FC778Core|r
 ## Notes: Shared platform for the Wick suite. Brand chrome, profiles, one options panel, client dialect shim, restriction guard, launcher, localization, version broadcast.
 ## Author: Wick
-## Version: 0.1.0
+## Version: 0.2.0
 ## SavedVariables: WickCoreDB
 ## X-Category: Library
 ## X-Website: https://wicksmods.com
@@ -19,3 +19,7 @@ Profiles.lua
 Options.lua
 Launcher.lua
 Version.lua
+Talents.lua
+Checklist.lua
+Racials.lua
+Kit.lua
