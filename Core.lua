@@ -300,6 +300,13 @@ function Core.self:OnEnable()
                 self:Print("saved to disk: " .. tostring(saved) .. (saved == Chrome:ThemeSetting() and "" or "  |cffE04B4B(not matching, report this)|r"))
                 self:Print("applied this session: " .. tostring(Chrome.applyLog or "never"))
                 self:Print("at file load: " .. tostring(Chrome.bootTrace or "?"))
+                local vt = Core.Profiles and Core.Profiles.varTypes
+                if vt then
+                    local parts = {}
+                    for name, t in pairs(vt) do parts[#parts + 1] = name .. "=" .. t end
+                    table.sort(parts)
+                    self:Print("every saved variable at binding: " .. table.concat(parts, "  "))
+                end
                 local tr = Core.Profiles and Core.Profiles.traces
                 self:Print("WickCoreDB at binding: " .. tostring(tr and tr.WickCoreDB or "never bound"))
                 self:Print("WickCoreDB now: " .. type(rawget(_G, "WickCoreDB"))

@@ -70,6 +70,8 @@ function Profiles:Init(addon, savedVar, defaults)
             for _ in pairs(sv.profileKeys) do keyed = keyed + 1 end
         end
         Profiles.traces = Profiles.traces or {}
+        Profiles.varTypes = Profiles.varTypes or {}
+        Profiles.varTypes[savedVar] = t
         Profiles.traces[savedVar] = ("var=%s, profileKeys=%d, theme=%s"):format(
             t, keyed, tostring(t == "table" and sv.global and sv.global.theme))
         Profiles.lastInit = savedVar .. ": " .. Profiles.traces[savedVar]
