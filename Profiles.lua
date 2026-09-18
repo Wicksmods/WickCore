@@ -69,9 +69,10 @@ function Profiles:Init(addon, savedVar, defaults)
         if t == "table" and type(sv.profileKeys) == "table" then
             for _ in pairs(sv.profileKeys) do keyed = keyed + 1 end
         end
-        Profiles.lastInit = ("%s: var=%s, profileKeys=%d, theme=%s"):format(
-            savedVar, t, keyed,
-            tostring(t == "table" and sv.global and sv.global.theme))
+        Profiles.traces = Profiles.traces or {}
+        Profiles.traces[savedVar] = ("var=%s, profileKeys=%d, theme=%s"):format(
+            t, keyed, tostring(t == "table" and sv.global and sv.global.theme))
+        Profiles.lastInit = savedVar .. ": " .. Profiles.traces[savedVar]
     end
     if type(sv) ~= "table" then
         sv = {}
@@ -91,6 +92,10 @@ function Profiles:Init(addon, savedVar, defaults)
         callbacks = {},
     }, DBProto)
 
+    -- Did our own assignment of the global actually take effect?
+    Profiles.traces[savedVar] = Profiles.traces[savedVar]
+        .. ", after bind=" .. type(rawget(_G, savedVar))
+        .. ", same=" .. tostring(rawget(_G, savedVar) == sv)
     db.charKey = self:CharKey()
     db.global  = Core.applyDefaults(sv.global, defaults.global or {})
     sv.char[db.charKey] = Core.applyDefaults(sv.char[db.charKey] or {}, defaults.char or {})
