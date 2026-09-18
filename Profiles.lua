@@ -90,10 +90,10 @@ function Profiles:Init(addon, savedVar, defaults)
             t, keyed, tostring(t == "table" and sv.global and sv.global.theme))
         Profiles.lastInit = savedVar .. ": " .. Profiles.traces[savedVar]
     end
-    if type(sv) ~= "table" then
-        sv = {}
-        _G[savedVar] = sv
-    end
+    if type(sv) ~= "table" then sv = {} end
+    -- Always publish it. Products read their saved variable by name, and a
+    -- table restored from the store has to be reachable that way too.
+    _G[savedVar] = sv
     sv.profiles    = sv.profiles    or {}
     sv.profileKeys = sv.profileKeys or {}
     sv.global      = sv.global      or {}

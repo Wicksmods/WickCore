@@ -142,11 +142,23 @@ function Persist:Track(key, db)
     self.tracked[key] = db
 end
 
-function Persist:SaveAll()
+-- The last payload written for each store, so an unchanged store is not
+-- rewritten on every pass.
+Persist.lastPayload = {}
+
+function Persist:SaveAll(force)
     if not self.engaged then return 0 end
     local saved = 0
     for key, db in pairs(self.tracked) do
-        if db and type(db.sv) == "table" and self:Save(key, db.sv) then saved = saved + 1 end
+        if db and type(db.sv) == "table" then
+            local ok, payload = pcall(Core.Serialize, db.sv)
+            if ok and type(payload) == "string" and (force or payload ~= self.lastPayload[key]) then
+                if self:Save(key, db.sv) then
+                    self.lastPayload[key] = payload
+                    saved = saved + 1
+                end
+            end
+        end
     end
     return saved
 end
@@ -160,9 +172,25 @@ function Persist:Report()
         names[#names + 1] = key .. "=" .. n
     end
     table.sort(names)
-    return "in use, chunks per store: " .. (#names > 0 and table.concat(names, " ") or "none yet")
+    return ("in use, saved every %ds. Chunks per store: %s"):format(
+        self.INTERVAL or 0, #names > 0 and table.concat(names, " ") or "none yet")
 end
+
+-- Saving only at logout would be fragile: a console variable set that
+-- late may not reach Config.wtf, and a crash would lose the session. The
+-- store is written while the player is still in the world, on a timer
+-- that skips stores nothing has changed in, and again on the way out.
+Persist.INTERVAL = 30
 
 local f = CreateFrame("Frame")
 f:RegisterEvent("PLAYER_LOGOUT")
-f:SetScript("OnEvent", function() Persist:SaveAll() end)
+f:RegisterEvent("PLAYER_LEAVING_WORLD")
+f:RegisterEvent("PLAYER_LOGIN")
+f:SetScript("OnEvent", function(_, event)
+    if event == "PLAYER_LOGIN" then
+        if Persist.ticker or not C_Timer or not C_Timer.NewTicker then return end
+        Persist.ticker = C_Timer.NewTicker(Persist.INTERVAL, function() Persist:SaveAll() end)
+        return
+    end
+    Persist:SaveAll()
+end)
