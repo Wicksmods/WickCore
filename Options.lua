@@ -80,7 +80,9 @@ function Options:ThemeSection(parent, x, y)
     local swatches = {}
     local function refresh()
         local setting = Chrome:ThemeSetting()
+        if parent.themePickers then for _, pk in ipairs(parent.themePickers) do pk.Paint() end end
         for _, sw in ipairs(swatches) do
+            if sw.Paint then sw.Paint() end
             local on = sw.theme.id == Chrome.activeTheme
             sw.ring:SetShown(on)
             sw.label:SetTextColor(on and C.fel[1] or C.muted[1], on and C.fel[2] or C.muted[2], on and C.fel[3] or C.muted[3], 1)
@@ -89,46 +91,120 @@ function Options:ThemeSection(parent, x, y)
         if parent.themeNote then
             local t = Chrome.ThemeByID[Chrome.activeTheme]
             parent.themeNote:SetText(setting == "auto" and ("Following your class: " .. (t and t.name or "?"))
-                or ((t and t.name or "?") .. (t and t.class and (" is the " .. t.class:sub(1, 1) .. t.class:sub(2):lower() .. " theme.") or "")))
+                or (t and t.custom and "Custom: your main and accent colors."
+                or ((t and t.name or "?") .. (t and t.class and (" is the " .. t.class:sub(1, 1) .. t.class:sub(2):lower() .. " theme.") or ""))))
         end
     end
-    local SW = 56
-    for i, t in ipairs(Chrome.Themes) do
+    local SW = 52
+    for i, def in ipairs(Chrome.Themes) do
+        local id = def.id
         local b = CreateFrame("Button", nil, parent)
         b:SetSize(SW, 40)
-        b:SetPoint("TOPLEFT", x + (i - 1) * (SW + 6), y)
+        b:SetPoint("TOPLEFT", x + (i - 1) * (SW + 5), y)
         local bg = b:CreateTexture(nil, "BACKGROUND")
-        bg:SetColorTexture(t.colors.void[1], t.colors.void[2], t.colors.void[3], 1)
         bg:SetPoint("TOPLEFT", 0, 0); bg:SetPoint("BOTTOMRIGHT", 0, 14)
         local strip = b:CreateTexture(nil, "ARTWORK")
-        strip:SetColorTexture(t.colors.shadow[1], t.colors.shadow[2], t.colors.shadow[3], 1)
         strip:SetPoint("TOPLEFT", 1, -1); strip:SetPoint("TOPRIGHT", -1, -1); strip:SetHeight(7)
         local acc = b:CreateTexture(nil, "OVERLAY")
-        acc:SetColorTexture(t.colors.fel[1], t.colors.fel[2], t.colors.fel[3], 1)
         acc:SetPoint("BOTTOMLEFT", bg, "BOTTOMLEFT", 4, 4); acc:SetSize(SW - 8, 3)
         local edge = b:CreateTexture(nil, "BORDER")
-        edge:SetColorTexture(t.colors.border[1], t.colors.border[2], t.colors.border[3], 1)
         edge:SetPoint("BOTTOMLEFT", bg, "BOTTOMLEFT", 0, 0); edge:SetPoint("BOTTOMRIGHT", bg, "BOTTOMRIGHT", 0, 0); edge:SetHeight(1)
         local ring = b:CreateTexture(nil, "OVERLAY")
-        ring:SetColorTexture(t.colors.fel[1], t.colors.fel[2], t.colors.fel[3], 1)
         ring:SetPoint("TOPLEFT", bg, "TOPLEFT", 0, 0); ring:SetPoint("TOPRIGHT", bg, "TOPRIGHT", 0, 0); ring:SetHeight(2)
         ring:Hide()
         b.ring = ring
         b.label = Chrome:Text(b, 10, C.muted)
         b.label:SetPoint("BOTTOM", 0, 0)
-        b.label:SetText(t.name)
-        b.theme = t
-        b:SetScript("OnClick", function() Chrome:SetTheme(t.id); refresh() end)
+        b.label:SetText(def.name)
+        -- Themes rebuild when class colors or custom colors change, so the
+        -- swatch re-reads its theme by id each refresh.
+        b.Paint = function()
+            local t = Chrome.ThemeByID[id]
+            if not t then return end
+            b.theme = t
+            bg:SetColorTexture(t.colors.void[1], t.colors.void[2], t.colors.void[3], 1)
+            strip:SetColorTexture(t.colors.shadow[1], t.colors.shadow[2], t.colors.shadow[3], 1)
+            acc:SetColorTexture(t.colors.fel[1], t.colors.fel[2], t.colors.fel[3], 1)
+            edge:SetColorTexture(t.colors.border[1], t.colors.border[2], t.colors.border[3], 1)
+            ring:SetColorTexture(t.colors.fel[1], t.colors.fel[2], t.colors.fel[3], 1)
+        end
+        b.Paint()
+        b:SetScript("OnClick", function() Chrome:SetTheme(id); refresh() end)
         b:SetScript("OnEnter", function()
+            local t = b.theme
             GameTooltip:SetOwner(b, "ANCHOR_RIGHT")
             GameTooltip:SetText(t.name, 1, 1, 1)
             if t.class then GameTooltip:AddLine(t.class:sub(1, 1) .. t.class:sub(2):lower() .. " theme", 0.6, 0.6, 0.6) end
+            if t.custom then GameTooltip:AddLine("Your own main and accent colors, set below.", 0.6, 0.6, 0.6) end
             GameTooltip:Show()
         end)
         b:SetScript("OnLeave", function() GameTooltip:Hide() end)
         swatches[#swatches + 1] = b
     end
     y = y - 46
+
+    -- Custom theme colors: two picker buttons that open Blizzard's color picker.
+    local function hexToRGB(h) return tonumber(h:sub(1, 2), 16) / 255, tonumber(h:sub(3, 4), 16) / 255, tonumber(h:sub(5, 6), 16) / 255 end
+    local function openPicker(r, g, b, onChange, onCancel)
+        local f = ColorPickerFrame
+        if not f then return end
+        if f.SetupColorPickerAndShow then
+            f:SetupColorPickerAndShow({ r = r, g = g, b = b, hasOpacity = false, swatchFunc = onChange, cancelFunc = onCancel })
+        else
+            f.func, f.cancelFunc, f.opacityFunc, f.hasOpacity = onChange, onCancel, nil, false
+            f:SetColorRGB(r, g, b)
+            f:Show()
+        end
+    end
+    local pickers = {}
+    local function makePicker(which, label, offsetX)
+        local b = CreateFrame("Button", nil, parent)
+        b:SetSize(150, 20)
+        b:SetPoint("TOPLEFT", x + offsetX, y)
+        local sw = b:CreateTexture(nil, "ARTWORK")
+        sw:SetSize(14, 14); sw:SetPoint("LEFT", 0, 0)
+        local swEdge = CreateFrame("Frame", nil, b)
+        swEdge:SetPoint("TOPLEFT", sw, "TOPLEFT", -1, 1); swEdge:SetPoint("BOTTOMRIGHT", sw, "BOTTOMRIGHT", 1, -1)
+        Chrome:AddBorder(swEdge)
+        b.lbl = Chrome:Text(b, 11)
+        b.lbl:SetPoint("LEFT", sw, "RIGHT", 8, 0)
+        b.Paint = function()
+            local h = Chrome.customColors[which]
+            local r, g, bb = hexToRGB(h)
+            sw:SetColorTexture(r, g, bb, 1)
+            b.lbl:SetText(label .. "  |cff8F8770" .. h .. "|r")
+        end
+        b:SetScript("OnClick", function()
+            local before = Chrome.customColors[which]
+            local r, g, bb = hexToRGB(before)
+            local function apply()
+                local nr, ng, nb = ColorPickerFrame:GetColorRGB()
+                if which == "main" then Chrome:SetCustomColors({ nr, ng, nb }, nil) else Chrome:SetCustomColors(nil, { nr, ng, nb }) end
+                if Chrome.activeTheme ~= "custom" then Chrome:SetTheme("custom") end
+                refresh()
+            end
+            openPicker(r, g, bb, apply, function()
+                if which == "main" then Chrome:SetCustomColors(before, nil) else Chrome:SetCustomColors(nil, before) end
+                refresh()
+            end)
+        end)
+        b.Paint()
+        pickers[#pickers + 1] = b
+        return b
+    end
+    local customHead = Chrome:Text(parent, 11, C.muted)
+    customHead:SetPoint("TOPLEFT", x, y)
+    customHead:SetText("Custom:")
+    makePicker("main", "Main", 58)
+    makePicker("accent", "Accent", 220)
+    local resetBtn = Chrome:Button(parent, "Reset", 60, 20)
+    resetBtn:SetPoint("TOPLEFT", x + 384, y)
+    resetBtn:SetScript("OnClick", function()
+        Chrome:SetCustomColors(Chrome.CUSTOM_DEFAULT.main, Chrome.CUSTOM_DEFAULT.accent)
+        refresh()
+    end)
+    parent.themePickers = pickers
+    y = y - 26
     parent.themeAuto = Chrome:Check(parent, "Follow my class",
         function() return Chrome:ThemeSetting() == "auto" end,
         function(v) Chrome:SetTheme(v and "auto" or Chrome.activeTheme); refresh() end)

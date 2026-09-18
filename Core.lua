@@ -249,6 +249,7 @@ Core.self = Core:NewAddon("WickCore", {
             debug   = false,
             theme   = "fel",     -- a theme id, or "auto" for the class theme
             classColors = "client",  -- "client" or "classic" for the TBC-era codes
+            custom  = { main = "383058", accent = "4FC778" },  -- the Custom theme's two colors
         },
     },
 })
@@ -288,7 +289,13 @@ function Core.self:OnEnable()
                     names[#names + 1] = (t.id == Chrome.activeTheme and "|cff" .. t.hex.fel .. t.id .. "|r" or t.id)
                 end
                 self:Print("theme: " .. tostring(Chrome:ThemeSetting()) .. " (" .. Chrome.activeTheme .. "), class colors: " .. Chrome.classColorSet .. ". Use /wickcore theme <id|auto|classic|client|dump>.")
+                self:Print("custom: /wickcore theme custom <main hex> <accent hex>, or pick colors on the options page.")
                 self:Print("themes: " .. table.concat(names, " "))
+            elseif want == "custom" and msg:match("^theme%s+custom%s+%S") then
+                local main, accent = msg:match("^theme%s+custom%s+#?(%x+)%s*#?(%x*)")
+                local t = Chrome:SetCustomColors(main, accent ~= "" and accent or nil)
+                Chrome:SetTheme("custom")
+                self:Print(("custom theme: main %s, accent |cff%s%s|r"):format(Chrome.customColors.main, t.hex.fel, Chrome.customColors.accent))
             elseif want == "classic" or want == "client" then
                 Chrome:SetClassColorSet(want)
                 self:Print("class colors: " .. (want == "classic" and "Classic-era set (as TBC UIs show them)" or "this client's set"))

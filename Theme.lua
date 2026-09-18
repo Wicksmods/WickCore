@@ -87,9 +87,28 @@ local function hsl(h, s, l)
     return { r + m, g + m, b + m, 1 }
 end
 
+local function rgbToHsl(c)
+    local r, g, b = c[1], c[2], c[3]
+    local mx, mn = math.max(r, g, b), math.min(r, g, b)
+    local l = (mx + mn) / 2
+    if mx == mn then return 0, 0, l end
+    local d = mx - mn
+    local s = l > 0.5 and d / (2 - mx - mn) or d / (mx + mn)
+    local h
+    if mx == r then h = (g - b) / d + (g < b and 6 or 0)
+    elseif mx == g then h = (b - r) / d + 2
+    else h = (r - g) / d + 4 end
+    return h * 60, s, l
+end
+
+-- The custom theme: the player picks a main color, whose hue and
+-- saturation drive the dark family, and an accent, used untouched.
+Chrome.CUSTOM_DEFAULT = { main = "383058", accent = FEL.fel }
+Chrome.customColors = { main = Chrome.CUSTOM_DEFAULT.main, accent = Chrome.CUSTOM_DEFAULT.accent }
+
 local TEXT = rgb(FEL.text)
-local function derive(accent, token)
-    local d = DARK_HUE[token] or { h = 258, s = 0.33 }
+local function derive(accent, token, dark)
+    local d = dark or DARK_HUE[token] or { h = 258, s = 0.33 }
     return {
         fel    = { accent[1], accent[2], accent[3], 1 },
         void   = hsl(d.h, d.s, DARK_L.void),
@@ -126,8 +145,32 @@ local function buildThemes()
         local name = token:sub(1, 1) .. token:sub(2):lower()
         add({ id = token:lower(), name = name, class = token, colors = derive(classAccent(token), token) })
     end
+    local cc = Chrome.customColors
+    local h, s = rgbToHsl(rgb(cc.main))
+    add({ id = "custom", name = "Custom", custom = true,
+          colors = derive(rgb(cc.accent), nil, { h = h, s = math.max(0.08, math.min(0.6, s)) }) })
 end
 buildThemes()
+
+local function cleanHex(v)
+    v = tostring(v or ""):gsub("^#", ""):upper()
+    if #v == 3 then v = v:gsub("(.)", "%1%1") end
+    return v:match("^%x%x%x%x%x%x$")
+end
+
+-- Set the custom theme's two colors (hex strings or {r,g,b} tables).
+-- Rebuilds the theme and repaints if it is the active one.
+function Chrome:SetCustomColors(main, accent)
+    if type(main) == "table" then main = hex(main) end
+    if type(accent) == "table" then accent = hex(accent) end
+    main = cleanHex(main) or self.customColors.main
+    accent = cleanHex(accent) or self.customColors.accent
+    self.customColors.main, self.customColors.accent = main, accent
+    local db = Core.self and Core.self.db and Core.self.db.global
+    if db then db.custom = { main = main, accent = accent } end
+    self:RebuildThemes()
+    return self.ThemeByID.custom
+end
 
 -- Classic class-color addons rewrite RAID_CLASS_COLORS at login; rebuild
 -- then so the themes follow, and reapply the active one.
@@ -207,9 +250,16 @@ function Chrome:ApplySavedTheme(global)
     local legacy = { storm = "shaman", wild = "druid", quiver = "hunter", arcane = "mage",
                      holy = "priest", light = "paladin", shadow = "rogue", iron = "warrior" }
     if legacy[setting] then setting = legacy[setting]; if global then global.theme = setting end end
+    local rebuild = false
     if global and global.classColors == "classic" then
         self.classColorSet = "classic"
-        buildThemes()
+        rebuild = true
     end
+    if global and type(global.custom) == "table" then
+        self.customColors.main = cleanHex(global.custom.main) or self.customColors.main
+        self.customColors.accent = cleanHex(global.custom.accent) or self.customColors.accent
+        rebuild = true
+    end
+    if rebuild then buildThemes() end
     self:ApplyTheme(self:ResolveTheme(setting))
 end
