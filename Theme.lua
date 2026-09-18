@@ -207,11 +207,22 @@ function Chrome:SaveTheme()
     return true
 end
 
--- Whatever happened during the session, the choice is written once more
--- immediately before the client serializes saved variables.
+-- Two moments matter. At logout the choice is written once more, right
+-- before the client serializes saved variables. At login it is read and
+-- applied again: the init-time pass runs inside a protected call that
+-- swallows its own errors, and anything loading after it could have
+-- repainted, so login is the authoritative application.
 local flush = CreateFrame("Frame")
 flush:RegisterEvent("PLAYER_LOGOUT")
-flush:SetScript("OnEvent", function() Chrome:SaveTheme() end)
+flush:RegisterEvent("PLAYER_LOGIN")
+flush:SetScript("OnEvent", function(_, event)
+    if event == "PLAYER_LOGOUT" then
+        Chrome:SaveTheme()
+        return
+    end
+    local g = themeStore()
+    if g then Chrome:ApplySavedTheme(g, "login") end
+end)
 
 local listeners = {}
 function Chrome:OnThemeChanged(fn) listeners[#listeners + 1] = fn end
@@ -278,8 +289,11 @@ function Chrome:SavedThemeSetting()
 end
 
 -- Called by WickCore's own OnInitialize, before any product builds a frame.
-function Chrome:ApplySavedTheme(global)
+function Chrome:ApplySavedTheme(global, source)
     local setting = global and global.theme or self.DEFAULT_THEME
+    -- Trace for /wickcore theme, so a silent failure is visible.
+    self.applyLog = (self.applyLog and (self.applyLog .. ", ") or "")
+        .. tostring(source or "init") .. "=" .. tostring(setting)
     -- Old saved ids from the first cut map onto the class ids.
     local legacy = { storm = "shaman", wild = "druid", quiver = "hunter", arcane = "mage",
                      holy = "priest", light = "paladin", shadow = "rogue", iron = "warrior" }
