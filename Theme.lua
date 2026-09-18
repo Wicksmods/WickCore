@@ -198,9 +198,15 @@ local function themeStore()
     end
 end
 
+-- True once a saved theme has been read back, or the player has chosen
+-- one. Until then the value on disk is better than anything in memory
+-- and must not be overwritten.
+Chrome.themeKnown = false
+
 function Chrome:SaveTheme()
     local g = themeStore()
     if not g then return false end
+    self.themeKnown = true
     g.theme = self.themeSetting
     g.classColors = self.classColorSet
     g.custom = { main = self.customColors.main, accent = self.customColors.accent }
@@ -217,7 +223,9 @@ flush:RegisterEvent("PLAYER_LOGOUT")
 flush:RegisterEvent("PLAYER_LOGIN")
 flush:SetScript("OnEvent", function(_, event)
     if event == "PLAYER_LOGOUT" then
-        Chrome:SaveTheme()
+        -- Never write a default we only fell back to. A session that
+        -- failed to read the setting must leave the good value alone.
+        if Chrome.themeKnown then Chrome:SaveTheme() end
         return
     end
     local g = themeStore()
