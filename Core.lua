@@ -288,7 +288,9 @@ function Core.self:OnEnable()
                 for _, t in ipairs(Chrome.Themes) do
                     names[#names + 1] = (t.id == Chrome.activeTheme and "|cff" .. t.hex.fel .. t.id .. "|r" or t.id)
                 end
+                local saved = Chrome:SavedThemeSetting()
                 self:Print("theme: " .. tostring(Chrome:ThemeSetting()) .. " (" .. Chrome.activeTheme .. "), class colors: " .. Chrome.classColorSet .. ". Use /wickcore theme <id|auto|classic|client|dump>.")
+                self:Print("saved to disk: " .. tostring(saved) .. (saved == Chrome:ThemeSetting() and "" or "  |cffE04B4B(not matching, report this)|r"))
                 self:Print("custom: /wickcore theme custom <main hex> <accent hex>, or pick colors on the options page.")
                 self:Print("themes: " .. table.concat(names, " "))
             elseif want == "custom" and msg:match("^theme%s+custom%s+%S") then

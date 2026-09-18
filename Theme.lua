@@ -166,8 +166,7 @@ function Chrome:SetCustomColors(main, accent)
     main = cleanHex(main) or self.customColors.main
     accent = cleanHex(accent) or self.customColors.accent
     self.customColors.main, self.customColors.accent = main, accent
-    local db = Core.self and Core.self.db and Core.self.db.global
-    if db then db.custom = { main = main, accent = accent } end
+    self:SaveTheme()
     self:RebuildThemes()
     return self.ThemeByID.custom
 end
@@ -182,6 +181,37 @@ end
 
 Chrome.DEFAULT_THEME = "fel"
 Chrome.activeTheme = Chrome.DEFAULT_THEME
+
+-- The player's choice lives here first. The saved variable is written on
+-- every change and again at logout, so a change made before the profile
+-- was bound still survives the session.
+Chrome.themeSetting = Chrome.DEFAULT_THEME
+
+local function themeStore()
+    local db = Core.self and Core.self.db and Core.self.db.global
+    if db then return db end
+    -- No profile bound yet: write straight into the saved variable.
+    local sv = rawget(_G, "WickCoreDB")
+    if type(sv) == "table" then
+        sv.global = sv.global or {}
+        return sv.global
+    end
+end
+
+function Chrome:SaveTheme()
+    local g = themeStore()
+    if not g then return false end
+    g.theme = self.themeSetting
+    g.classColors = self.classColorSet
+    g.custom = { main = self.customColors.main, accent = self.customColors.accent }
+    return true
+end
+
+-- Whatever happened during the session, the choice is written once more
+-- immediately before the client serializes saved variables.
+local flush = CreateFrame("Frame")
+flush:RegisterEvent("PLAYER_LOGOUT")
+flush:SetScript("OnEvent", function() Chrome:SaveTheme() end)
 
 local listeners = {}
 function Chrome:OnThemeChanged(fn) listeners[#listeners + 1] = fn end
@@ -223,8 +253,8 @@ end
 -- Choose a theme and remember it. setting may be a theme id or "auto".
 function Chrome:SetTheme(setting)
     local id = self:ResolveTheme(setting)
-    local db = Core.self and Core.self.db and Core.self.db.global
-    if db then db.theme = (setting == "auto" or setting == "class") and "auto" or id end
+    self.themeSetting = (setting == "auto" or setting == "class") and "auto" or id
+    self:SaveTheme()
     return self:ApplyTheme(id)
 end
 
@@ -232,15 +262,19 @@ end
 function Chrome:SetClassColorSet(which)
     which = which == "classic" and "classic" or "client"
     self.classColorSet = which
-    local db = Core.self and Core.self.db and Core.self.db.global
-    if db then db.classColors = which end
+    self:SaveTheme()
     self:RebuildThemes()
     return which
 end
 
 function Chrome:ThemeSetting()
-    local db = Core.self and Core.self.db and Core.self.db.global
-    return db and db.theme or self.DEFAULT_THEME
+    return self.themeSetting or self.DEFAULT_THEME
+end
+
+-- What is actually on disk right now, for diagnosing a lost setting.
+function Chrome:SavedThemeSetting()
+    local g = themeStore()
+    return g and g.theme
 end
 
 -- Called by WickCore's own OnInitialize, before any product builds a frame.
@@ -249,7 +283,8 @@ function Chrome:ApplySavedTheme(global)
     -- Old saved ids from the first cut map onto the class ids.
     local legacy = { storm = "shaman", wild = "druid", quiver = "hunter", arcane = "mage",
                      holy = "priest", light = "paladin", shadow = "rogue", iron = "warrior" }
-    if legacy[setting] then setting = legacy[setting]; if global then global.theme = setting end end
+    if legacy[setting] then setting = legacy[setting] end
+    self.themeSetting = setting
     local rebuild = false
     if global and global.classColors == "classic" then
         self.classColorSet = "classic"
@@ -261,5 +296,6 @@ function Chrome:ApplySavedTheme(global)
         rebuild = true
     end
     if rebuild then buildThemes() end
+    self:SaveTheme()
     self:ApplyTheme(self:ResolveTheme(setting))
 end
