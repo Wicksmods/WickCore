@@ -21,7 +21,9 @@ local Persist = {}
 Core.Persist = Persist
 
 local CHUNK      = 900   -- characters per console variable
-local MAX_CHUNKS = 24    -- about 21KB encoded, per store
+local MAX_CHUNKS = 64    -- about 57KB encoded, per store. Bags already
+                         -- needs nine with one character, and its alt
+                         -- snapshots grow with every character added.
 
 local CV = rawget(_G, "C_CVar")
 local function cvGet(n) if CV and CV.GetCVar then return CV.GetCVar(n) end local f = rawget(_G, "GetCVar"); return f and f(n) end
