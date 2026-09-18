@@ -6,8 +6,8 @@
 -- are drawn in. Fel is the brand and the default; it is also the warlock
 -- theme. The other eight themes take their accent from the client's own
 -- class color table (RAID_CLASS_COLORS, C_ClassColor on retail) so they
--- match what the game paints in raid frames and chat, over neutral darks
--- so the class color is the only hue on the panel.
+-- match what the game paints in raid frames and chat, and sit on deep
+-- companion darks the way Fel's green sits on the brand's purple.
 --
 -- Chrome.Colors is mutated in place so every reference a product holds
 -- follows the switch, and every region Chrome created with a palette token
@@ -59,19 +59,43 @@ local function classAccent(token)
     return rgb(CLASS_HEX[token] or FEL.fel)
 end
 
--- Class themes follow the convention class-colored UIs settled on: the
--- accent is the exact class color and everything behind it is neutral
--- near-black, so the color reads as the class instead of tinting the
--- panel. Text stays the brand off-white. Only the border picks up a trace
--- of the accent so the frame edge belongs to the theme.
-local NEUTRAL = { void = rgb("0B0B0D"), shadow = rgb("15151A"), border = rgb("2A2A31"), text = rgb(FEL.text) }
-local function derive(accent)
+-- The brand's darks are not the accent's hue: Fel's green sits on a deep
+-- saturated purple. Each class theme gets the same treatment, a companion
+-- hue for void, shadow and border at the brand's own saturation and
+-- lightness, with the client's class color left untouched as the accent.
+-- Hue and saturation per class; lightness is fixed to match Fel's darks.
+local DARK_HUE = {
+    SHAMAN  = { h = 215, s = 0.42 },   -- deep sea
+    DRUID   = { h = 24,  s = 0.42 },   -- umber
+    HUNTER  = { h = 112, s = 0.30 },   -- forest
+    MAGE    = { h = 236, s = 0.40 },   -- midnight
+    PRIEST  = { h = 42,  s = 0.24 },   -- candle-lit oak
+    PALADIN = { h = 346, s = 0.36 },   -- crimson
+    ROGUE   = { h = 222, s = 0.12 },   -- charcoal
+    WARRIOR = { h = 8,   s = 0.40 },   -- blood and rust
+}
+local DARK_L = { void = 0.06, shadow = 0.10, border = 0.27 }
+
+local function hsl(h, s, l)
+    local c = (1 - math.abs(2 * l - 1)) * s
+    local hp = (h % 360) / 60
+    local x = c * (1 - math.abs(hp % 2 - 1))
+    local r, g, b = 0, 0, 0
+    if hp < 1 then r, g = c, x elseif hp < 2 then r, g = x, c elseif hp < 3 then g, b = c, x
+    elseif hp < 4 then g, b = x, c elseif hp < 5 then r, b = x, c else r, b = c, x end
+    local m = l - c / 2
+    return { r + m, g + m, b + m, 1 }
+end
+
+local TEXT = rgb(FEL.text)
+local function derive(accent, token)
+    local d = DARK_HUE[token] or { h = 258, s = 0.33 }
     return {
         fel    = { accent[1], accent[2], accent[3], 1 },
-        void   = { NEUTRAL.void[1], NEUTRAL.void[2], NEUTRAL.void[3], 1 },
-        shadow = { NEUTRAL.shadow[1], NEUTRAL.shadow[2], NEUTRAL.shadow[3], 1 },
-        border = mix(NEUTRAL.border, accent, 0.22),
-        text   = { NEUTRAL.text[1], NEUTRAL.text[2], NEUTRAL.text[3], 1 },
+        void   = hsl(d.h, d.s, DARK_L.void),
+        shadow = hsl(d.h, d.s, DARK_L.shadow),
+        border = hsl(d.h, d.s * 0.9, DARK_L.border),
+        text   = { TEXT[1], TEXT[2], TEXT[3], 1 },
     }
 end
 
@@ -100,7 +124,7 @@ local function buildThemes()
           colors = { fel = rgb(FEL.fel), void = rgb(FEL.void), shadow = rgb(FEL.shadow), border = rgb(FEL.border), text = rgb(FEL.text) } })
     for _, token in ipairs(CLASS_ORDER) do
         local name = token:sub(1, 1) .. token:sub(2):lower()
-        add({ id = token:lower(), name = name, class = token, colors = derive(classAccent(token)) })
+        add({ id = token:lower(), name = name, class = token, colors = derive(classAccent(token), token) })
     end
 end
 buildThemes()
