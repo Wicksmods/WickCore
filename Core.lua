@@ -256,7 +256,7 @@ Core.self = Core:NewAddon("WickCore", {
 
 function Core.self:OnInitialize()
     Core.debug = self.db.global.debug and true or false
-    if Core.Chrome and Core.Chrome.ApplySavedTheme then Core.Chrome:ApplySavedTheme(self.db.global) end
+    if Core.Chrome and Core.Chrome.ApplySavedTheme then Core.Chrome:ApplySavedTheme("init") end
 end
 
 function Core.self:OnEnable()

@@ -198,15 +198,26 @@ do
         tostring(type(sv) == "table" and sv.global and sv.global.theme))
 end
 
+-- Always go to the live saved variable first. The client assigns it just
+-- before ADDON_LOADED, and if our profile was ever bound to a table the
+-- client then replaced, that copy is an orphan: reads see defaults and
+-- writes are never serialized, while the real values sit untouched on
+-- disk. Reading the global directly is immune to that.
 local function themeStore()
-    local db = Core.self and Core.self.db and Core.self.db.global
-    if db then return db end
-    -- No profile bound yet: write straight into the saved variable.
     local sv = rawget(_G, "WickCoreDB")
     if type(sv) == "table" then
         sv.global = sv.global or {}
         return sv.global
     end
+    return Core.self and Core.self.db and Core.self.db.global
+end
+
+-- True when the profile layer is holding a table the client has replaced.
+local function profileIsOrphaned()
+    local sv = rawget(_G, "WickCoreDB")
+    local db = Core.self and Core.self.db and Core.self.db.global
+    if type(sv) ~= "table" or not db then return nil end
+    return sv.global ~= db
 end
 
 -- True once a saved theme has been read back, or the player has chosen
@@ -239,8 +250,7 @@ flush:SetScript("OnEvent", function(_, event)
         if Chrome.themeKnown then Chrome:SaveTheme() end
         return
     end
-    local g = themeStore()
-    if g then Chrome:ApplySavedTheme(g, "login") end
+    Chrome:ApplySavedTheme("login")
 end)
 
 local listeners = {}
@@ -308,11 +318,13 @@ function Chrome:SavedThemeSetting()
 end
 
 -- Called by WickCore's own OnInitialize, before any product builds a frame.
-function Chrome:ApplySavedTheme(global, source)
+function Chrome:ApplySavedTheme(source)
+    local global = themeStore()
     local setting = global and global.theme or self.DEFAULT_THEME
     -- Trace for /wickcore theme, so a silent failure is visible.
     self.applyLog = (self.applyLog and (self.applyLog .. ", ") or "")
         .. tostring(source or "init") .. "=" .. tostring(setting)
+        .. (profileIsOrphaned() and " (orphaned profile)" or "")
     -- Old saved ids from the first cut map onto the class ids.
     local legacy = { storm = "shaman", wild = "druid", quiver = "hunter", arcane = "mage",
                      holy = "priest", light = "paladin", shadow = "rogue", iron = "warrior" }
