@@ -292,6 +292,7 @@ function Core.self:OnEnable()
                 self:Print("theme: " .. tostring(Chrome:ThemeSetting()) .. " (" .. Chrome.activeTheme .. "), class colors: " .. Chrome.classColorSet .. ". Use /wickcore theme <id|auto|classic|client|dump>.")
                 self:Print("saved to disk: " .. tostring(saved) .. (saved == Chrome:ThemeSetting() and "" or "  |cffE04B4B(not matching, report this)|r"))
                 self:Print("applied this session: " .. tostring(Chrome.applyLog or "never"))
+                self:Print("at file load: " .. tostring(Chrome.bootTrace or "?"))
                 self:Print("custom: /wickcore theme custom <main hex> <accent hex>, or pick colors on the options page.")
                 self:Print("themes: " .. table.concat(names, " "))
             elseif want == "custom" and msg:match("^theme%s+custom%s+%S") then

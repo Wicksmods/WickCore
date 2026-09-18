@@ -187,6 +187,17 @@ Chrome.activeTheme = Chrome.DEFAULT_THEME
 -- was bound still survives the session.
 Chrome.themeSetting = Chrome.DEFAULT_THEME
 
+-- What the client handed us before any of our own code touched it. If the
+-- saved variable is missing here, the client never loaded the file and no
+-- amount of reading it later will help.
+do
+    local sv = rawget(_G, "WickCoreDB")
+    Chrome.bootTrace = ("sv=%s, global=%s, theme=%s"):format(
+        type(sv),
+        type(sv) == "table" and type(sv.global) or "nil",
+        tostring(type(sv) == "table" and sv.global and sv.global.theme))
+end
+
 local function themeStore()
     local db = Core.self and Core.self.db and Core.self.db.global
     if db then return db end
