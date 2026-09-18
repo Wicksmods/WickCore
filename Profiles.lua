@@ -88,6 +88,28 @@ function Profiles:Init(addon, savedVar, defaults)
     return db
 end
 
+-- The client assigns saved variables around ADDON_LOADED. If our binding
+-- ever happens before that, the client's assignment replaces the global
+-- and leaves us holding an abandoned table: every read sees defaults and
+-- nothing is ever written back, while the real values sit on disk. Check
+-- at login and adopt the live table when that has happened.
+function DBProto:Rebind()
+    local live = _G[self.savedVar]
+    if type(live) ~= "table" or live == self.sv then return false end
+    live.profiles    = live.profiles    or {}
+    live.profileKeys = live.profileKeys or {}
+    live.global      = live.global      or {}
+    live.char        = live.char        or {}
+    live.keyMode     = live.keyMode     or self.sv.keyMode or "char"
+    self.sv = live
+    self.global = Core.applyDefaults(live.global, self.defaults.global or {})
+    live.char[self.charKey] = Core.applyDefaults(live.char[self.charKey] or {}, self.defaults.char or {})
+    self.char = live.char[self.charKey]
+    self:_Select(self:_KeyFor(live.keyMode))
+    self:_Fire("OnProfileChanged", self.profileName, self.profileName)
+    return true
+end
+
 -- The lookup key for the current keying mode.
 function DBProto:_KeyFor(mode)
     if mode == "spec" then return "spec:" .. Profiles:SpecKey() end

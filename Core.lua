@@ -143,7 +143,12 @@ function Core:NewAddon(name, opts)
         if loaded ~= loadedName then return end
         A:_Init()
     end)
-    A:On("PLAYER_LOGIN", function() A:_Enable() end)
+    A:On("PLAYER_LOGIN", function()
+        -- Login is the first moment the saved variable is certainly the
+        -- client's own table, so adopt it before anything reads settings.
+        if A.db and A.db.Rebind then Core.safe(A.db.Rebind, A.db) end
+        A:_Enable()
+    end)
 
     self.addons[name] = A
     table.insert(self.order, name)
@@ -207,6 +212,8 @@ end
 function AddonProto:_Enable()
     if self.enabled or not self.initialized then return end
     self.enabled = true
+    -- Adopt the real saved-variable table if our binding beat the client to it.
+    if self.db and self.db.Rebind then Core.safe(self.db.Rebind, self.db) end
     if self.version then Core.Version:Register(self) end
     if self.OnEnable then Core.safe(self.OnEnable, self) end
 end
