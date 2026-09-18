@@ -279,6 +279,13 @@ function Core.self:OnEnable()
                 self:Print(string.format("%s %s%s", A.title, A.version or "?",
                     A.enabled and "" or " (not enabled)"))
             end
+        elseif msg:match("^store") then
+            if msg:match("clear") then
+                for key in pairs(Core.Persist and Core.Persist.tracked or {}) do Core.Persist:Clear(key) end
+                self:Print("settings store cleared.")
+            else
+                self:Print("settings store: " .. (Core.Persist and Core.Persist:Report() or "not loaded"))
+            end
         elseif msg == "options" then
             self:OpenOptions()
         elseif msg:match("^theme") then
@@ -332,7 +339,7 @@ function Core.self:OnEnable()
         else
             for _, line in ipairs(Core.Client:Report()) do self:Print(line) end
             self:Print("restrictions: " .. Core.Restrict:Summary())
-            self:Print("/wickcore dialect | addons | options | theme | debug")
+            self:Print("/wickcore dialect | addons | options | theme | store | debug")
         end
     end, "/wickcore", "/wc")
 

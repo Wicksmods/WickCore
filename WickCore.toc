@@ -4,7 +4,6 @@
 ## Author: Wick
 ## Version: 0.3.0
 ## SavedVariables: WickCoreDB
-## SavedVariablesPerCharacter: WickCoreCharDB
 ## X-Category: Library
 ## X-Website: https://wicksmods.com
 ## X-License: MIT with trademark carve-out
@@ -17,6 +16,7 @@ Dialect.lua
 Locale.lua
 Chrome.lua
 Theme.lua
+Persist.lua
 Profiles.lua
 Options.lua
 Launcher.lua

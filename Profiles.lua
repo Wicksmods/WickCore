@@ -61,6 +61,20 @@ end
 function Profiles:Init(addon, savedVar, defaults)
     defaults = defaults or {}
     local sv = _G[savedVar]
+    local handedOver = type(sv) == "table"
+    if not handedOver and Core.Persist then
+        -- This client writes saved variables and never reads them back.
+        -- Restore our own copy from the console-variable store.
+        local restored = Core.Persist:Load(savedVar)
+        if type(restored) == "table" then
+            sv = restored
+            Core.Persist.engaged = true
+        elseif Core.Persist.AVAILABLE then
+            -- Nothing stored yet, but the client still gave us nothing, so
+            -- start keeping a copy from now on.
+            Core.Persist.engaged = true
+        end
+    end
     -- Exactly what the client had handed over at binding time. If this
     -- says the variable is missing, the client did not load the file.
     do
@@ -98,6 +112,8 @@ function Profiles:Init(addon, savedVar, defaults)
     Profiles.traces[savedVar] = Profiles.traces[savedVar]
         .. ", after bind=" .. type(rawget(_G, savedVar))
         .. ", same=" .. tostring(rawget(_G, savedVar) == sv)
+    db.fromStore = not handedOver
+    if Core.Persist then Core.Persist:Track(savedVar, db) end
     db.charKey = self:CharKey()
     db.global  = Core.applyDefaults(sv.global, defaults.global or {})
     sv.char[db.charKey] = Core.applyDefaults(sv.char[db.charKey] or {}, defaults.char or {})
