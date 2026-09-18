@@ -225,7 +225,23 @@ end
 -- and must not be overwritten.
 Chrome.themeKnown = false
 
+-- The account-wide store is not coming back on this client, so the choice
+-- is mirrored into a per-character variable, which the client loads by a
+-- different path. Whichever one survives is used at login.
+local function charStore()
+    local cs = rawget(_G, "WickCoreCharDB")
+    if type(cs) ~= "table" then
+        cs = {}
+        _G.WickCoreCharDB = cs
+    end
+    return cs
+end
+
 function Chrome:SaveTheme()
+    local cs = charStore()
+    cs.theme = self.themeSetting
+    cs.classColors = self.classColorSet
+    cs.custom = { main = self.customColors.main, accent = self.customColors.accent }
     local g = themeStore()
     if not g then return false end
     self.themeKnown = true
@@ -320,11 +336,23 @@ end
 -- Called by WickCore's own OnInitialize, before any product builds a frame.
 function Chrome:ApplySavedTheme(source)
     local global = themeStore()
-    local setting = global and global.theme or self.DEFAULT_THEME
+    local cs = rawget(_G, "WickCoreCharDB")
+    -- Prefer whichever store actually came back with a value.
+    local setting = (global and global.theme)
+        or (type(cs) == "table" and cs.theme)
+        or self.DEFAULT_THEME
+    if type(cs) == "table" and cs.theme then
+        self.classColorSet = cs.classColors or self.classColorSet
+        if type(cs.custom) == "table" then
+            self.customColors.main = cs.custom.main or self.customColors.main
+            self.customColors.accent = cs.custom.accent or self.customColors.accent
+        end
+    end
     -- Trace for /wickcore theme, so a silent failure is visible.
     self.applyLog = (self.applyLog and (self.applyLog .. ", ") or "")
         .. tostring(source or "init") .. "=" .. tostring(setting)
         .. (profileIsOrphaned() and " (orphaned profile)" or "")
+        .. ", perchar=" .. tostring(type(cs) == "table" and cs.theme or "nil")
     -- Old saved ids from the first cut map onto the class ids.
     local legacy = { storm = "shaman", wild = "druid", quiver = "hunter", arcane = "mage",
                      holy = "priest", light = "paladin", shadow = "rogue", iron = "warrior" }

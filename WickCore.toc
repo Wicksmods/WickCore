@@ -4,6 +4,7 @@
 ## Author: Wick
 ## Version: 0.3.0
 ## SavedVariables: WickCoreDB
+## SavedVariablesPerCharacter: WickCoreCharDB
 ## X-Category: Library
 ## X-Website: https://wicksmods.com
 ## X-License: MIT with trademark carve-out
