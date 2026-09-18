@@ -300,6 +300,8 @@ function Core.self:OnEnable()
                 self:Print("saved to disk: " .. tostring(saved) .. (saved == Chrome:ThemeSetting() and "" or "  |cffE04B4B(not matching, report this)|r"))
                 self:Print("applied this session: " .. tostring(Chrome.applyLog or "never"))
                 self:Print("at file load: " .. tostring(Chrome.bootTrace or "?"))
+                self:Print("at binding: " .. tostring(Core.Profiles and Core.Profiles.lastInit or "?"))
+                self:Print("live table now: theme=" .. tostring(rawget(_G, "WickCoreDB") and WickCoreDB.global and WickCoreDB.global.theme))
                 self:Print("custom: /wickcore theme custom <main hex> <accent hex>, or pick colors on the options page.")
                 self:Print("themes: " .. table.concat(names, " "))
             elseif want == "custom" and msg:match("^theme%s+custom%s+%S") then

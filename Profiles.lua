@@ -61,6 +61,18 @@ end
 function Profiles:Init(addon, savedVar, defaults)
     defaults = defaults or {}
     local sv = _G[savedVar]
+    -- Exactly what the client had handed over at binding time. If this
+    -- says the variable is missing, the client did not load the file.
+    do
+        local t = type(sv)
+        local keyed = 0
+        if t == "table" and type(sv.profileKeys) == "table" then
+            for _ in pairs(sv.profileKeys) do keyed = keyed + 1 end
+        end
+        Profiles.lastInit = ("%s: var=%s, profileKeys=%d, theme=%s"):format(
+            savedVar, t, keyed,
+            tostring(t == "table" and sv.global and sv.global.theme))
+    end
     if type(sv) ~= "table" then
         sv = {}
         _G[savedVar] = sv
