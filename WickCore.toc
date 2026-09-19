@@ -16,7 +16,6 @@ Dialect.lua
 Locale.lua
 Chrome.lua
 Theme.lua
-Persist.lua
 Profiles.lua
 Options.lua
 Launcher.lua
