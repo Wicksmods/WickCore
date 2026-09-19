@@ -280,6 +280,20 @@ function Proto:Init()
     if s and s.shown then self:SetShown(true) end
 end
 
+-- The options row every product shows, so the bar is discoverable without
+-- knowing the slash command. Off until the player turns it on.
+function Proto:OptionRow(page, y)
+    local O = Core.Options
+    y = O:Check(page, "Show the cooldown bar",
+        function() local s = self:Store(); return s and s.shown == true end,
+        function(v) self:SetShown(v) end, y)
+    y = O:Check(page, "Lock the cooldown bar",
+        function() return self:IsLocked() end,
+        function(v) self:SetLocked(v) end, y)
+    y = O:Note(page, "A row of icons for the spells you name, since the game's own cooldown manager is empty for some classes. Edit it with the cd command: add, remove, list, import, export, reset.", y)
+    return y
+end
+
 -- One slash handler a product can delegate its "cd" subcommand to.
 -- Returns true when it handled the input.
 function Proto:Command(rest)
