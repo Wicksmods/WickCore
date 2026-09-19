@@ -294,6 +294,101 @@ function Proto:OptionRow(page, y)
     return y
 end
 
+-- ============================================================
+-- The kit tab
+-- ============================================================
+-- The same controls as the options row, plus the list itself, so the bar
+-- can be built without leaving the kit window.
+
+local ROW_H = 22
+
+function Proto:AttachPane(pane)
+    self.pane = pane
+    pane.note = Chrome:Text(pane, 10, C.muted)
+    pane.note:SetPoint("TOPLEFT", 0, 0)
+    pane.note:SetWidth(380)
+    pane.note:SetJustifyH("LEFT")
+    pane.note:SetText("The game's own cooldown manager is empty for some classes and cannot be added to. This row is ours: name the spells you want to watch.")
+
+    pane.showCheck = Chrome:Check(pane, "Show the bar",
+        function() local st = self:Store(); return st and st.shown == true end,
+        function(v) self:SetShown(v); self:RefreshPane() end)
+    pane.showCheck:SetPoint("TOPLEFT", 0, -30)
+    pane.lockCheck = Chrome:Check(pane, "Locked",
+        function() return self:IsLocked() end,
+        function(v) self:SetLocked(v) end)
+    pane.lockCheck:SetPoint("TOPLEFT", 150, -30)
+
+    pane.listTop = -56
+    pane.rows = {}
+    pane.empty = Chrome:Text(pane, 11, C.muted)
+    pane.empty:SetPoint("TOPLEFT", 0, pane.listTop)
+
+    local add = Chrome:Button(pane, "Add spell", 80, 20)
+    add:SetPoint("BOTTOMLEFT", 0, 0)
+    add:SetScript("OnClick", function()
+        Core.Options:ShowExport(self.addon, "", function(text)
+            local ok, why = self:Add(text)
+            self.addon:Print(ok and ("added " .. tostring(why)) or ("add: " .. tostring(why)))
+            self:RefreshPane()
+        end)
+    end)
+    local imp = Chrome:Button(pane, "Import", 70, 20)
+    imp:SetPoint("LEFT", add, "RIGHT", 6, 0)
+    imp:SetScript("OnClick", function()
+        Core.Options:ShowExport(self.addon, "", function(text)
+            local ok, why = self:Import(text)
+            self.addon:Print(ok and ("imported " .. tostring(why) .. " spells") or ("import: " .. tostring(why)))
+            self:RefreshPane()
+        end)
+    end)
+    local exp = Chrome:Button(pane, "Export", 70, 20)
+    exp:SetPoint("LEFT", imp, "RIGHT", 6, 0)
+    exp:SetScript("OnClick", function() Core.Options:ShowExport(self.addon, self:Export()) end)
+    local rst = Chrome:Button(pane, "Reset", 70, 20)
+    rst:SetPoint("LEFT", exp, "RIGHT", 6, 0)
+    rst:SetScript("OnClick", function() self:Reset(); self:RefreshPane() end)
+
+    self:RefreshPane()
+end
+
+function Proto:RefreshPane()
+    local pane = self.pane
+    if not pane then return end
+    if pane.showCheck and pane.showCheck.Refresh then pane.showCheck.Refresh() end
+    if pane.lockCheck and pane.lockCheck.Refresh then pane.lockCheck.Refresh() end
+    local list = self:List()
+    pane.empty:SetShown(#list == 0)
+    pane.empty:SetText("Nothing tracked yet. Add a spell, or import a list.")
+    local y = pane.listTop
+    for i, name in ipairs(list) do
+        local r = pane.rows[i]
+        if not r then
+            r = CreateFrame("Frame", nil, pane)
+            r:SetSize(380, ROW_H)
+            r.icon = r:CreateTexture(nil, "ARTWORK")
+            r.icon:SetSize(16, 16)
+            r.icon:SetPoint("LEFT", 2, 0)
+            r.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+            r.name = Chrome:Text(r, 11)
+            r.name:SetPoint("LEFT", r.icon, "RIGHT", 8, 0)
+            r.del = Chrome:Button(r, "x", 18, 18)
+            r.del:SetPoint("RIGHT", 0, 0)
+            pane.rows[i] = r
+        end
+        local info = D.GetSpellInfo(name)
+        r.icon:SetTexture((info and info.icon) or "Interface\\Icons\\INV_Misc_QuestionMark")
+        r.icon:SetDesaturated(info == nil)
+        r.name:SetText(name .. (info and "" or "  (not learned)"))
+        r.del:SetScript("OnClick", function() self:Remove(name); self:RefreshPane() end)
+        r:ClearAllPoints()
+        r:SetPoint("TOPLEFT", 0, y)
+        r:Show()
+        y = y - ROW_H
+    end
+    for i = #list + 1, #pane.rows do pane.rows[i]:Hide() end
+end
+
 -- One slash handler a product can delegate its "cd" subcommand to.
 -- Returns true when it handled the input.
 function Proto:Command(rest)

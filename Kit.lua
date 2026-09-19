@@ -63,10 +63,13 @@ function Proto:Build()
     p.content:SetPoint("BOTTOMRIGHT", -10, 10)
 
     self.tabs, self.panes = {}, {}
-    local defs = { { id = "talents", label = "Talents" }, { id = "checklist", label = "Checklist" }, { id = "racials", label = "Racials" } }
+    local defs = { { id = "talents", label = "Talents" }, { id = "checklist", label = "Checklist" },
+                   { id = "racials", label = "Racials" }, { id = "cooldowns", label = "Cooldowns" } }
     local x = 8
     for _, t in ipairs(defs) do
-        if (t.id ~= "checklist" or self.checklist) and (t.id ~= "racials" or self.opts.racials ~= false) then
+        if (t.id ~= "checklist" or self.checklist)
+           and (t.id ~= "racials" or self.opts.racials ~= false)
+           and (t.id ~= "cooldowns" or A.cooldowns ~= nil) then
             local b = CreateFrame("Button", nil, strip)
             b:SetSize(80, TAB_H)
             b:SetPoint("LEFT", x, 0)
@@ -89,6 +92,7 @@ function Proto:Build()
     self:BuildTalents(self.panes.talents)
     if self.panes.checklist then self:BuildChecklist(self.panes.checklist) end
     if self.panes.racials then self:BuildRacials(self.panes.racials) end
+    if self.panes.cooldowns and A.cooldowns then A.cooldowns:AttachPane(self.panes.cooldowns) end
 
     p:SetScript("OnShow", function() self:Refresh() end)
     R:OnChange(function() if p:IsShown() then self:Refresh() end end)
@@ -118,7 +122,8 @@ function Proto:Refresh()
     if not self.panel or not self.panel:IsShown() then return end
     if self.active == "talents" then self:RefreshTalents()
     elseif self.active == "checklist" and self.checklist then self.checklist:Refresh()
-    elseif self.active == "racials" then Racials:Refresh() end
+    elseif self.active == "racials" then Racials:Refresh()
+    elseif self.active == "cooldowns" and self.addon.cooldowns then self.addon.cooldowns:RefreshPane() end
 end
 
 -- ============================================================
