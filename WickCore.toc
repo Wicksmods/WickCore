@@ -24,4 +24,5 @@ Version.lua
 Talents.lua
 Checklist.lua
 Racials.lua
+Cooldowns.lua
 Kit.lua
