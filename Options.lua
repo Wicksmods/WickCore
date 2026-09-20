@@ -223,6 +223,69 @@ function Options:ThemeSection(parent, x, y)
     return y
 end
 
+-- Pages outgrew the panel once the client-error and profile sections
+-- arrived, so they scroll. A bare ScrollFrame keeps the flat look:
+-- Blizzard's scroll templates bring their dialog textures with them.
+local function makeScroller(parent)
+    local scroll = CreateFrame("ScrollFrame", nil, parent)
+    local body = CreateFrame("Frame", nil, scroll)
+    body:SetSize(1, 1)
+    scroll:SetScrollChild(body)
+
+    local track = Chrome:Texture(parent, "ARTWORK", Chrome.Colors.border)
+    track:SetWidth(2)
+    local thumb = Chrome:Texture(parent, "OVERLAY", Chrome.Colors.fel)
+    thumb:SetWidth(2)
+    track:Hide()
+    thumb:Hide()
+
+    local function span(f) return tonumber(f:GetHeight()) or 0 end
+    local function range() return math.max(0, span(body) - span(scroll)) end
+
+    local function refresh()
+        local r = range()
+        if r <= 0 then
+            track:Hide()
+            thumb:Hide()
+            scroll:SetVerticalScroll(0)
+            return
+        end
+        track:Show()
+        thumb:Show()
+        local view, full = span(scroll), span(body)
+        local th = math.max(20, view * (view / full))
+        thumb:SetHeight(th)
+        local at = math.min(r, math.max(0, tonumber(scroll:GetVerticalScroll()) or 0))
+        thumb:ClearAllPoints()
+        thumb:SetPoint("TOP", track, "TOP", 0, -((at / r) * (view - th)))
+    end
+
+    local function scrollBy(delta)
+        local r = range()
+        if r <= 0 then return end
+        local at = math.min(r, math.max(0, ((tonumber(scroll:GetVerticalScroll()) or 0) - delta * 32)))
+        scroll:SetVerticalScroll(at)
+        refresh()
+    end
+
+    scroll:EnableMouseWheel(true)
+    scroll:SetScript("OnMouseWheel", function(_, delta) scrollBy(delta) end)
+    -- The body is the thing under the cursor over most of the page.
+    body:EnableMouseWheel(true)
+    body:SetScript("OnMouseWheel", function(_, delta) scrollBy(delta) end)
+
+    scroll.track, scroll.thumb, scroll.Refresh = track, thumb, refresh
+    return scroll, body
+end
+
+-- Lay the body out to fit what was built into it, then show or hide the bar.
+local function fitBody(scroll, body)
+    local w = tonumber(scroll:GetWidth()) or 0
+    if w > 0 then body:SetWidth(w) end
+    body:SetHeight(math.max(1, -(body.__extent or 0) + 16))
+    scroll:Refresh()
+end
+
 -- Register a page for an addon. buildFn(page, addon) runs on first show.
 function Options:Register(addon, buildFn)
     local root = ensureRoot()
@@ -240,11 +303,20 @@ function Options:Register(addon, buildFn)
         local ver = Chrome:Text(p, 11, Chrome.Colors.muted)
         ver:SetPoint("LEFT", title, "RIGHT", 10, 0)
         ver:SetText(tostring(addon.version or ""))
-        local body = CreateFrame("Frame", nil, p)
-        body:SetPoint("TOPLEFT", 16, -48)
-        body:SetPoint("BOTTOMRIGHT", -16, 16)
-        p.body = body
+        local scroll, body = makeScroller(p)
+        scroll:SetPoint("TOPLEFT", 16, -48)
+        scroll:SetPoint("BOTTOMRIGHT", -22, 16)
+        scroll.track:SetPoint("TOPRIGHT", p, "TOPRIGHT", -14, -48)
+        scroll.track:SetPoint("BOTTOMRIGHT", p, "BOTTOMRIGHT", -14, 16)
+        p.scroll, p.body = scroll, body
         Core.safe(buildFn, body, addon)
+        fitBody(scroll, body)
+        -- The panel has no size yet on the first show, so measure again once
+        -- the frame system has placed it, and on every resize after that.
+        scroll:SetScript("OnSizeChanged", function() fitBody(scroll, body) end)
+        if C_Timer and C_Timer.After then
+            C_Timer.After(0, function() fitBody(scroll, body) end)
+        end
     end)
 
     local entry = { frame = page }
@@ -273,32 +345,45 @@ end
 -- Layout helpers: each returns the next y offset
 -- ============================================================
 
+-- Every helper reports how far down the page it reached, so the scroll
+-- child can be sized to its content without each addon having to say.
+local function consume(parent, y)
+    parent.__extent = math.min(parent.__extent or 0, y)
+    return y
+end
+
 function Options:Heading(parent, text, y)
     local fs = Chrome:Heading(parent, text)
     fs:SetPoint("TOPLEFT", 0, y)
-    return y - 22
+    return consume(parent, y - 22)
 end
 
 function Options:Check(parent, label, get, set, y)
     local c = Chrome:Check(parent, label, get, set)
     c:SetPoint("TOPLEFT", 0, y)
-    return y - 22
+    return consume(parent, y - 22)
 end
 
 function Options:Button(parent, text, onClick, y, width)
     local b = Chrome:Button(parent, text, width)
     b:SetPoint("TOPLEFT", 0, y)
     b:SetScript("OnClick", onClick)
-    return y - 28
+    return consume(parent, y - 28)
 end
 
 function Options:Note(parent, text, y)
     local fs = Chrome:Text(parent, 11, Chrome.Colors.muted)
     fs:SetPoint("TOPLEFT", 0, y)
-    fs:SetWidth(520)
+    local w = tonumber(parent:GetWidth())
+    fs:SetWidth((w and w > 80) and (w - 8) or 520)
     fs:SetJustifyH("LEFT")
     fs:SetText(text)
-    return y - 18 - (select(2, text:gsub("\n", "")) * 13)
+    -- Ask the font string how tall it actually came out.
+    local h = tonumber(fs.GetStringHeight and fs:GetStringHeight())
+    if not h or h <= 0 then
+        h = 13 + select(2, text:gsub("\n", "")) * 13
+    end
+    return consume(parent, y - math.ceil(h) - 6)
 end
 
 -- Standard profile controls every product gets for free.
