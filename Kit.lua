@@ -65,6 +65,16 @@ function Proto:Build()
     self.tabs, self.panes = {}, {}
     local defs = { { id = "talents", label = "Talents" }, { id = "checklist", label = "Checklist" },
                    { id = "racials", label = "Racials" }, { id = "cooldowns", label = "Cooldowns" } }
+    -- A product can add tabs of its own. The core should not have to know
+    -- what a hunter keeps in one, so it takes an id, a label and something
+    -- to call with the empty pane.
+    local extra = {}
+    for _, t in ipairs(self.opts.tabs or {}) do
+        if t.id and t.label then
+            defs[#defs + 1] = t
+            extra[t.id] = t.attach
+        end
+    end
     local x = 8
     for _, t in ipairs(defs) do
         if (t.id ~= "checklist" or self.checklist)
@@ -93,6 +103,9 @@ function Proto:Build()
     if self.panes.checklist then self:BuildChecklist(self.panes.checklist) end
     if self.panes.racials then self:BuildRacials(self.panes.racials) end
     if self.panes.cooldowns and A.cooldowns then A.cooldowns:AttachPane(self.panes.cooldowns) end
+    for id, attach in pairs(extra) do
+        if self.panes[id] and attach then Core.safe(attach, self.panes[id]) end
+    end
 
     p:SetScript("OnShow", function() self:Refresh() end)
     R:OnChange(function() if p:IsShown() then self:Refresh() end end)
