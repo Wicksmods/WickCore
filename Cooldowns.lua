@@ -165,7 +165,9 @@ function Proto:Build()
     f:SetClampedToScreen(true)
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
-    f:SetScript("OnDragStart", function(fr) if s and not s.locked then fr:StartMoving() end end)
+    f:SetScript("OnDragStart", function(fr)
+        if Chrome:DragAllowed(s and s.locked) then fr:StartMoving() end
+    end)
     f:SetScript("OnDragStop", function(fr)
         fr:StopMovingOrSizing()
         if s then Chrome:SavePosition(fr, s.window) end

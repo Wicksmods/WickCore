@@ -131,6 +131,22 @@ function Chrome:TitleMarkup(title)
 end
 
 -- ============================================================
+-- Dragging
+-- ============================================================
+-- One rule for every locked thing in the suite. A lock is there to stop
+-- an accidental nudge while you are clicking the bar, not to stop you
+-- moving it on purpose, and hunting for the unlock checkbox every time
+-- is worse than the accident. Shift always moves the frame.
+--
+-- Anything with a lock asks this rather than testing the flag itself, so
+-- the answer is the same everywhere and there is one place to change it.
+function Chrome:DragAllowed(locked)
+    if not locked then return true end
+    local shift = rawget(_G, "IsShiftKeyDown")
+    return (shift and shift()) and true or false
+end
+
+-- ============================================================
 -- Panel
 -- ============================================================
 -- local panel = Chrome:NewPanel("WicksBagsFrame", {
