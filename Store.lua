@@ -36,7 +36,7 @@ local Store = {}
 Core.Store = Store
 
 Store.PREFIX  = "WickCfg"    -- WickCfg01 .. WickCfg60
-Store.CHUNK   = 240          -- a macro body holds 255; leave room
+Store.CHUNK   = 255          -- a macro body holds exactly this many
 Store.MAX     = 60           -- of 120 account slots
 Store.ICON    = 134400       -- INV_Misc_QuestionMark, a fileID this client accepts
 Store.HEADER  = "WC1"
@@ -225,6 +225,34 @@ end
 
 Store.b64enc, Store.b64dec = b64enc, b64dec
 
+-- Settings are almost entirely printable text already, and base64 made
+-- every one of them a third bigger. So the payload goes into the macro
+-- as it is, with only the bytes a macro body might mangle escaped: the
+-- escape character itself, pipes (the client's own markup), line ends
+-- and control characters. Anything written by the base64 version is
+-- still readable, because the header tells the two apart.
+local ESC = { ["~"] = "~~", ["|"] = "~p", [string.char(10)] = "~n", [string.char(13)] = "~r" }
+local UNESC = { ["~"] = "~", p = "|", n = string.char(10), r = string.char(13) }
+
+local function escape(s)
+    return (s:gsub("[~|%c]", function(c)
+        return ESC[c] or ("~x%02X"):format(c:byte())
+    end))
+end
+
+local function unescape(s)
+    return (s:gsub("~(x%x%x)", function(h) return string.char(tonumber(h:sub(2), 16)) end)
+             :gsub("~(.)", UNESC))
+end
+Store.escape, Store.unescape = escape, unescape
+
+-- What a stored body says once joined back together, whichever version
+-- wrote it.
+local function unpackBodies(joined)
+    if joined:sub(1, #Store.HEADER) == Store.HEADER then return unescape(joined) end
+    return b64dec(joined)
+end
+
 -- ============================================================
 -- Macros
 -- ============================================================
@@ -267,7 +295,7 @@ function Store:Read()
         i = i + 1
     end
     if #parts == 0 then return nil end
-    local decoded, err = self:Decode(b64dec(table.concat(parts)))
+    local decoded, err = self:Decode(unpackBodies(table.concat(parts)))
     if type(decoded) ~= "table" then
         self.readError = err
         return nil
@@ -280,7 +308,7 @@ function Store:Write(tbl)
     if InCombatLockdown and InCombatLockdown() then return false, "in combat" end
 
     local payload = self:Encode(tbl)
-    local encoded = b64enc(payload)
+    local encoded = escape(payload)
     local needed = math.ceil(#encoded / self.CHUNK)
 
     -- Over budget: shed the heaviest addon rather than save nothing.
@@ -288,7 +316,7 @@ function Store:Write(tbl)
     while needed > self.MAX do
         local worst, worstSize
         for name, value in pairs(tbl) do
-            local size = #b64enc(self:Encode({ [name] = value }))
+            local size = #escape(self:Encode({ [name] = value }))
             if not worstSize or size > worstSize then worst, worstSize = name, size end
         end
         if not worst then return false, "too big and nothing to drop" end
@@ -296,7 +324,7 @@ function Store:Write(tbl)
         self.dropped = (self.dropped and (self.dropped .. ", ") or "") .. worst
         if next(tbl) == nil then return false, "too big for the macro budget" end
         payload = self:Encode(tbl)
-        encoded = b64enc(payload)
+        encoded = escape(payload)
         needed = math.ceil(#encoded / self.CHUNK)
     end
 
@@ -351,27 +379,67 @@ end
 -- client loads any, it loads that one. WicksProfile assigning it at file
 -- scope does not count as the client; Profiles:Init already knows that.
 
+-- Whether the client needs this at all: one fact, the handed-over flag.
+function Store:Needed()
+    local db = Core.self and Core.self.db
+    if not db then return false, "WickCore has no db" end
+    if db.handedOver then return false, "the client handed saved variables over, so they are being kept the normal way" end
+    if not GetNumMacros or not CreateMacro then return false, "this client has no macro API" end
+    return true, "the client handed nothing over at load"
+end
+
+-- Whether to actually run: opt in. Macros are the player's own screen
+-- space, and fifty question marks in the macro window is a decision for
+-- them, not for us. On means either they said "on" this session or our
+-- macros are already there from a session where they did. Off leaves
+-- nothing behind, so it is the state a fresh install is in.
 function Store:Decide()
     if self.enabled ~= nil then return self.enabled end
-    local db = Core.self and Core.self.db
-    if not db then
-        self.enabled = false
-        self.reason = "WickCore has no db"
+    local needed, why = self:Needed()
+    if not needed then
+        self.enabled, self.reason = false, why
         return false
     end
-    if db.handedOver then
-        self.enabled = false
-        self.reason = "the client handed saved variables over, so they are being kept the normal way"
+    if self.optedIn then
+        self.enabled, self.reason = true, why
+        return true
+    end
+    -- Macros arrive from the server a moment after addons load. Until
+    -- the batch lands there is nothing to decide from, and deciding
+    -- "off" now would be remembered for the session: a slow login would
+    -- never restore. Stay undecided and watch.
+    if not self:MacrosPresent() then
+        self.waiting = true
         return false
     end
-    if not GetNumMacros then
-        self.enabled = false
-        self.reason = "this client has no macro API"
-        return false
+    if next(ours()) ~= nil then
+        self.enabled, self.reason = true, why
+        return true
     end
-    self.enabled = true
-    self.reason = "the client handed nothing over at load"
-    return true
+    self.enabled, self.reason = false, "off: nothing stored yet. /wickcore store on to keep settings in macros"
+    return false
+end
+
+function Store:TurnOn()
+    local needed, why = self:Needed()
+    if not needed then return false, why end
+    self.optedIn = true
+    self.enabled, self.reason = true, why
+    self.waiting = false
+    self.announced = true
+    if C_Timer and C_Timer.NewTicker and not self.ticking then
+        self.ticking = true
+        C_Timer.NewTicker(self.PERIOD, function() self:Save() end)
+    end
+    return self:Save(true)
+end
+
+function Store:TurnOff()
+    local n = self:Clear()
+    self.optedIn = false
+    self.enabled, self.reason = false, "off by request"
+    self.lastEncoded = nil
+    return n
 end
 
 -- ============================================================
@@ -396,7 +464,10 @@ end
 -- Called from AddonProto:_Enable, before the addon's OnEnable. Hands
 -- the addon back its table if the store has one and the client did not.
 function Store:RestoreFor(addon)
-    if not self:Decide() then return false end
+    if not self:Decide() then
+        if self.waiting then self:WatchForArrival() end
+        return false
+    end
     local db = addon and addon.db
     local var = addon and addon.opts and addon.opts.savedVar
     if not db or not var or db.handedOver then return false end
@@ -434,13 +505,20 @@ end
 -- they do.
 function Store:Poll()
     if self.cache then return true end
-    local data = self:Data()
-    if not data then return false end
+    if not self:MacrosPresent() then return false end
     self.waiting = false
+    local data = self:Data()
+    if not data then
+        -- Arrived, and none of it ours: that settles it as off.
+        self:Decide()
+        self:Announce()
+        return true
+    end
     local n = self:RestoreAll()
-    if n > 0 then
+    if n > 0 and self.announced then
         say(("settings arrived a moment late and were put back for %d addon%s."):format(n, n == 1 and "" or "s"))
     end
+    self:Announce()
     return true
 end
 
@@ -462,13 +540,95 @@ end
 -- Save
 -- ============================================================
 
+-- A copy of the table with the addon's declared caches taken out. An
+-- inventory snapshot of every alt is worth having, and it is worth
+-- nothing in here: it regrows the next time that alt logs in, and left
+-- in it would grow past the budget and take the addon's real settings
+-- down with it.
+local function withoutCaches(sv, paths)
+    if not paths or #paths == 0 then return sv end
+    local copy = Core.copy(sv)
+    for _, path in ipairs(paths) do
+        local node, last = copy, nil
+        local parts = Core.split(path, ".")
+        for i = 1, #parts - 1 do
+            node = type(node) == "table" and node[parts[i]] or nil
+            if not node then break end
+        end
+        if type(node) == "table" then node[parts[#parts]] = nil end
+    end
+    return copy
+end
+
+-- Most of a saved variable is its own defaults, written back by
+-- applyDefaults on every load. Those need no keeping: anything equal to
+-- the default is dropped, and the restore puts the defaults back exactly
+-- as a fresh load would. applyDefaults deep-merges tables and fills only
+-- nil scalars, so the diff recurses into keyed tables the same way. A
+-- list is kept or dropped whole: filling a list the player emptied would
+-- be wrong, so lists are only dropped when equal to the default.
+local function isList(t)
+    return type(t) == "table" and next(t) ~= nil and rawget(t, 1) ~= nil
+end
+
+local function deepEqual(a, b)
+    if a == b then return true end
+    if type(a) ~= "table" or type(b) ~= "table" then return false end
+    for k, v in pairs(a) do if not deepEqual(v, b[k]) then return false end end
+    for k in pairs(b) do if a[k] == nil then return false end end
+    return true
+end
+
+local function withoutDefaults(value, default)
+    if type(value) ~= "table" then
+        if value == default then return nil end
+        return value
+    end
+    if type(default) ~= "table" or isList(value) or isList(default) then
+        if deepEqual(value, default) then return nil end
+        return Core.copy(value)
+    end
+    local out = {}
+    for k, v in pairs(value) do
+        local kept = withoutDefaults(v, default[k])
+        if kept ~= nil then out[k] = kept end
+    end
+    if next(out) == nil then return nil end
+    return out
+end
+Store.withoutDefaults = withoutDefaults
+
+local function slim(sv, defaults)
+    defaults = defaults or {}
+    local out = {}
+    local profiles = {}
+    for name, prof in pairs(sv.profiles or {}) do
+        profiles[name] = withoutDefaults(prof, defaults.profile or {}) or {}
+    end
+    out.profiles = profiles
+    out.profileKeys = Core.copy(sv.profileKeys or {})
+    out.keyMode = sv.keyMode
+    out.global = withoutDefaults(sv.global or {}, defaults.global or {}) or {}
+    local chars = {}
+    for key, c in pairs(sv.char or {}) do
+        local kept = withoutDefaults(c, defaults.char or {})
+        if kept then chars[key] = kept end
+    end
+    out.char = chars
+    -- Anything else at the top level is the addon's own and travels whole.
+    for k, v in pairs(sv) do
+        if out[k] == nil and k ~= "profiles" and k ~= "global" and k ~= "char" then out[k] = Core.copy(v) end
+    end
+    return out
+end
+
 function Store:Snapshot()
     local out, count = {}, 0
     for _, addon in Core:IterateAddons() do
         local var = addon.opts and addon.opts.savedVar
         local db = addon.db
         if var and db and type(db.sv) == "table" then
-            out[var] = db.sv
+            out[var] = withoutCaches(slim(db.sv, db.defaults), addon.opts.storeExclude)
             count = count + 1
         end
     end
@@ -481,6 +641,7 @@ end
 -- ends.
 function Store:Save(force)
     if not self:Decide() then return false, self.reason end
+    if not self.enabled then return false, self.reason end
     local snap, count = self:Snapshot()
     if count == 0 then return false, "nothing to save" end
     if InCombatLockdown and InCombatLockdown() then
@@ -491,7 +652,7 @@ function Store:Save(force)
     -- ever "unchanged".
     local stamp = snap.__stamp
     snap.__stamp = nil
-    local encoded = b64enc(self:Encode(snap))
+    local encoded = escape(self:Encode(snap))
     snap.__stamp = stamp
     if not force and encoded == self.lastEncoded then return true, 0 end
     local ok, info = self:Write(snap)
@@ -536,25 +697,13 @@ f:RegisterEvent("PLAYER_LOGOUT")
 f:RegisterEvent("PLAYER_REGEN_ENABLED")
 f:SetScript("OnEvent", function(_, event)
     if event == "PLAYER_LOGIN" then
-        if not Store:Decide() then return end
-        -- Anyone who enabled before the macros arrived is picked up here.
-        if Store.waiting then Store:Poll() end
-        local n = 0
-        for _ in pairs(Store.restored) do n = n + 1 end
-        if n > 0 then
-            say(("settings put back from %d macro%s%s."):format(Store.cacheCount or 0,
-                (Store.cacheCount or 0) == 1 and "" or "s",
-                Store.stamp and (", saved " .. Store.stamp) or ""))
-        elseif Store.cache then
-            say("a settings store exists in your macros but nothing here needed it.")
-        else
-            say("this client hands no settings back at load, so they will be kept in macros named " .. Store.PREFIX .. "NN from here on.")
+        Store:Decide()
+        if Store.waiting then
+            -- Nothing from the server yet. The poll announces when it lands.
+            Store:WatchForArrival()
+            return
         end
-        if C_Timer and C_Timer.NewTicker then
-            C_Timer.NewTicker(Store.PERIOD, function() Store:Save() end)
-        end
-        -- The first snapshot, once every addon has enabled.
-        if C_Timer and C_Timer.After then C_Timer.After(5, function() Store:Save() end) end
+        Store:Announce()
     elseif event == "PLAYER_LOGOUT" then
         -- Best effort. The periodic save is what this relies on; this
         -- only catches the last minute.
@@ -564,9 +713,46 @@ f:SetScript("OnEvent", function(_, event)
     end
 end)
 
--- /wickcore store [save|clear]
+-- One line at login, once the decision is settled, and the periodic
+-- save if it is on.
+function Store:Announce()
+    if self.announced then return end
+    self.announced = true
+    if not self.enabled then
+        if self:Needed() then
+            say("this client hands no settings back at load. /wickcore store on keeps them in a handful of macros; nothing is written until you ask.")
+        end
+        return
+    end
+    local n = 0
+    for _ in pairs(self.restored) do n = n + 1 end
+    if n > 0 then
+        say(("settings put back from %d macro%s%s."):format(self.cacheCount or 0,
+            (self.cacheCount or 0) == 1 and "" or "s",
+            self.stamp and (", saved " .. self.stamp) or ""))
+    elseif self.cache then
+        say("a settings store exists in your macros but nothing here needed it.")
+    end
+    if C_Timer and C_Timer.NewTicker then
+        C_Timer.NewTicker(self.PERIOD, function() self:Save() end)
+    end
+    if C_Timer and C_Timer.After then C_Timer.After(5, function() self:Save() end) end
+end
+
+-- /wickcore store [on|off|save|clear]
 function Store:Command(arg)
     arg = Core.trim(arg or ""):lower()
+    if arg == "on" then
+        local ok, info = self:TurnOn()
+        say(ok and ("on. Settings saved into %d macro%s named %sNN; they will be kept from here on."):format(info, info == 1 and "" or "s", self.PREFIX)
+            or ("could not turn on: " .. tostring(info)))
+        return
+    end
+    if arg == "off" then
+        local n = self:TurnOff()
+        say(("off. Removed %d macro%s. Settings will not be kept on this client until you turn it on again."):format(n, n == 1 and "" or "s"))
+        return
+    end
     if arg == "save" then
         local ok, info = self:Save(true)
         say(ok and ("saved into %d macro%s, %d characters."):format(info, info == 1 and "" or "s", self.lastBytes or 0)
@@ -575,7 +761,7 @@ function Store:Command(arg)
     end
     if arg == "clear" then
         local n = self:Clear()
-        say(("removed %d %s macro%s. Settings will be saved again in a minute unless you disable this."):format(n, self.PREFIX, n == 1 and "" or "s"))
+        say(("removed %d %s macro%s. The store is still on; /wickcore store off keeps them gone."):format(n, self.PREFIX, n == 1 and "" or "s"))
         return
     end
     self:Decide()

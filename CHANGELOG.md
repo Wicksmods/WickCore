@@ -20,6 +20,12 @@ change, once a minute if anything differs, and at logout.
 - Runs only when the client handed WickCoreDB over as nil. If saved
   variables start loading, it stays out of the way and says so
 - /wickcore store [save|clear]
+- Addons declare cache paths with storeExclude (Bags: global.alts, the
+  alt inventory snapshot) and those are left out of the store, so a cache
+  cannot grow past the budget and take an addon's settings down with it
+- Bodies are escaped rather than base64: settings are printable text, and
+  base64 made every one a third bigger. Fifty-four macros became about
+  twenty. Anything the base64 version wrote still reads back
 
 ## 0.3.0 - 2026-09-17
 
