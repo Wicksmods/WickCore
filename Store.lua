@@ -36,10 +36,9 @@ local Store = {}
 Core.Store = Store
 
 Store.PREFIX  = "WickCfg"    -- WickCfg01 .. WickCfg60
--- 240, not 255. The macro window accepts 255 and the client writes 255
--- to its own cache, but what comes back from the server after a restart
--- is short by a character, and a payload cut at every chunk boundary
--- decodes to nonsense. The Probe proved 240 round-trips a full restart.
+-- 240 leaves room under the 255 the macro window allows. The server adds
+-- a newline to every body on the way back, which trimEnds removes; the
+-- margin is for anything else a future build decides to add.
 Store.CHUNK   = 240
 Store.MAX     = 60           -- of 120 account slots
 Store.ICON    = 134400       -- INV_Misc_QuestionMark, a fileID this client accepts
@@ -268,6 +267,19 @@ local NAME_PATTERN = "^" .. Store.PREFIX .. "(%d%d)$"
 
 local function nameFor(i) return ("%s%02d"):format(Store.PREFIX, i) end
 
+-- A body written as 240 characters comes back from the server after a
+-- restart as 241: the server puts a newline on the end of every macro.
+-- In game that read as "WickCfg01 holds 256 characters" and broke the
+-- join at every chunk boundary. Our bodies never contain a raw line end,
+-- so anything of the kind at either edge is the server's and goes.
+local LF, CR = string.char(10), string.char(13)
+local function trimEnds(body)
+    local i, j = 1, #body
+    while i <= j and (body:sub(i, i) == LF or body:sub(i, i) == CR) do i = i + 1 end
+    while j >= i and (body:sub(j, j) == LF or body:sub(j, j) == CR) do j = j - 1 end
+    return body:sub(i, j)
+end
+
 local function ours()
     local found = {}
     if not GetNumMacros or not GetMacroInfo then return found end
@@ -275,7 +287,7 @@ local function ours()
     for i = 1, (g or 0) do
         local name, _, body = GetMacroInfo(i)
         local n = name and tonumber(name:match(NAME_PATTERN))
-        if n then found[n] = { index = i, body = body or "" } end
+        if n then found[n] = { index = i, body = trimEnds(body or "") } end
     end
     return found
 end
