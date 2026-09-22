@@ -659,8 +659,26 @@ local function slim(sv, defaults)
     return out
 end
 
+-- What goes into the macros: everything the store already holds, with
+-- this session's addons written over the top.
+--
+-- Starting from an empty table was data loss. Addons can be enabled per
+-- character, so a session is only ever a subset of the account, and
+-- rebuilding the store from the addons loaded right now erased every
+-- other one. Settings set up on a hunter came back as defaults after an
+-- hour on a warrior with the hunter kit switched off, which reads
+-- exactly like the store having failed.
+--
+-- An addon absent this session keeps whatever was stored for it, and is
+-- only ever replaced by that same addon running again.
 function Store:Snapshot()
     local out, count = {}, 0
+    local held = self:Data()
+    if type(held) == "table" then
+        for var, value in pairs(held) do
+            if var ~= "__stamp" and type(value) == "table" then out[var] = value end
+        end
+    end
     for _, addon in Core:IterateAddons() do
         local var = addon.opts and addon.opts.savedVar
         local db = addon.db
@@ -671,6 +689,25 @@ function Store:Snapshot()
     end
     out.__stamp = date and date("%Y-%m-%d %H:%M") or nil
     return out, count
+end
+
+-- Everything the store holds that nothing loaded this session owns, for
+-- the status line: it is the difference between "kept for your other
+-- characters" and "quietly gone".
+function Store:Carried()
+    local mine = {}
+    for _, addon in Core:IterateAddons() do
+        local var = addon.opts and addon.opts.savedVar
+        if var then mine[var] = true end
+    end
+    local held, out = self:Data(), {}
+    if type(held) == "table" then
+        for var in pairs(held) do
+            if var ~= "__stamp" and not mine[var] then out[#out + 1] = var end
+        end
+    end
+    table.sort(out)
+    return out
 end
 
 -- Write only when something changed, unless forced. In combat the write
@@ -821,6 +858,10 @@ function Store:Command(arg)
     for name in pairs(self.restored) do names[#names + 1] = name end
     table.sort(names)
     say("put back this session: " .. (#names > 0 and table.concat(names, ", ") or "nothing"))
+    local carried = self:Carried()
+    if #carried > 0 then
+        say("carried for addons not loaded here: " .. table.concat(carried, ", "))
+    end
     if self.bodyLengths and #self.bodyLengths > 0 then
         say("body lengths: " .. table.concat(self.bodyLengths, ", ") .. " (chunk " .. self.CHUNK .. ")")
     end
