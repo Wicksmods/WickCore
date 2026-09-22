@@ -156,6 +156,18 @@ end
 -- })
 -- panel.content is the inset frame products draw into.
 
+-- Register a named frame so Escape hides it before the game menu opens.
+-- Only frames with a global name can be listed, and only once.
+function Chrome:CloseOnEscape(frame)
+    local name = frame and frame.GetName and frame:GetName()
+    if not name then return false end
+    local list = rawget(_G, "UISpecialFrames")
+    if type(list) ~= "table" then return false end
+    for _, n in ipairs(list) do if n == name then return true end end
+    list[#list + 1] = name
+    return true
+end
+
 function Chrome:NewPanel(name, o)
     o = o or {}
     local f = CreateFrame("Frame", name, o.parent or UIParent)
@@ -204,6 +216,10 @@ function Chrome:NewPanel(name, o)
         close:SetScript("OnLeave", function() x:SetTextColor(C.text[1], C.text[2], C.text[3], 1) end)
         close:SetScript("OnClick", function() f:Hide() end)
         f.close = close
+        -- Escape closes it too, ahead of the game menu. UISpecialFrames is
+        -- how every window in the game asks for that, and CloseSpecialWindows
+        -- only ever hides what is listed, so nothing of theirs is touched.
+        Chrome:CloseOnEscape(f)
     end
 
     -- Content inset
