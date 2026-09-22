@@ -1,5 +1,26 @@
 # WickCore - Changelog
 
+## 0.4.0 - 2026-09-21
+
+### Settings that survive this client
+
+The Forever beta writes saved variables at logout and hands nothing back at
+load. Macros are the one thing an addon can write that provably comes back,
+so every Wick saved variable is now kept in account macros named WickCfg01
+onward as well: dictionary-coded, base64, 240 characters a macro, 60 macros
+at most. Restored as each addon enables, before its OnEnable, so no product
+applies defaults it did not choose. Written ten seconds after an options
+change, once a minute if anything differs, and at logout.
+
+- Core.Store: Encode/Decode, Read/Write/Clear, RestoreFor, Save, Dirty.
+  Deterministic encoding, so "changed" is a string compare
+- DBProto:RebindTo(table), which Rebind now uses; db.handedOver records
+  whether the client itself supplied the table (a WicksProfile bake does
+  not count)
+- Runs only when the client handed WickCoreDB over as nil. If saved
+  variables start loading, it stays out of the way and says so
+- /wickcore store [save|clear]
+
 ## 0.3.0 - 2026-09-17
 
 ### Themes

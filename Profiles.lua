@@ -100,6 +100,15 @@ function Profiles:Init(addon, savedVar, defaults)
         .. ", after bind=" .. type(rawget(_G, savedVar))
         .. ", same=" .. tostring(rawget(_G, savedVar) == sv)
     db.fromStore = not handedOver
+    -- Only the client counts as having handed the table over. WicksProfile
+    -- assigns globals at file scope from a bake, and the store must still
+    -- be allowed to put something newer on top of that.
+    local bake = rawget(_G, "WicksProfile")
+    local baked = false
+    if handedOver and type(bake) == "table" and type(bake.restored) == "table" then
+        for _, name in ipairs(bake.restored) do if name == savedVar then baked = true end end
+    end
+    db.handedOver = handedOver and not baked
     db.charKey = self:CharKey()
     db.global  = Core.applyDefaults(sv.global, defaults.global or {})
     sv.char[db.charKey] = Core.applyDefaults(sv.char[db.charKey] or {}, defaults.char or {})
@@ -117,6 +126,15 @@ end
 function DBProto:Rebind()
     local live = _G[self.savedVar]
     if type(live) ~= "table" or live == self.sv then return false end
+    return self:RebindTo(live)
+end
+
+-- Adopt a table from anywhere: the client's late assignment, or the
+-- macro store handing settings back. The global is pointed at it so the
+-- client serializes this table at logout, not the abandoned one.
+function DBProto:RebindTo(live)
+    if type(live) ~= "table" then return false end
+    _G[self.savedVar] = live
     live.profiles    = live.profiles    or {}
     live.profileKeys = live.profileKeys or {}
     live.global      = live.global      or {}

@@ -359,7 +359,12 @@ function Options:Heading(parent, text, y)
 end
 
 function Options:Check(parent, label, get, set, y)
-    local c = Chrome:Check(parent, label, get, set)
+    -- Every change made through an options page is something worth
+    -- keeping, so the store hears about it.
+    local c = Chrome:Check(parent, label, get, function(...)
+        set(...)
+        if Core.Store then Core.Store:Dirty() end
+    end)
     c:SetPoint("TOPLEFT", 0, y)
     return consume(parent, y - 22)
 end

@@ -14,7 +14,7 @@ if not Core then return end
 
 Core._sourceAddon = ADDON
 Core.MAJOR, Core.MINOR = MAJOR, MINOR
-Core.VERSION = "0.3.0"
+Core.VERSION = "0.4.0"
 _G.WickCore = Core
 
 -- Persist across a same-session upgrade of the library.
@@ -212,6 +212,10 @@ end
 function AddonProto:_Enable()
     if self.enabled or not self.initialized then return end
     self.enabled = true
+    -- On a client that hands nothing back at load, the store has the
+    -- table. It is put back here, before OnEnable, so no product ever
+    -- applies defaults it did not choose.
+    if Core.Store and self.db then Core.safe(Core.Store.RestoreFor, Core.Store, self) end
     -- Adopt the real saved-variable table if our binding beat the client to it.
     if self.db and self.db.Rebind then Core.safe(self.db.Rebind, self.db) end
     if self.version then Core.Version:Register(self) end
@@ -281,6 +285,8 @@ function Core.self:OnEnable()
             end
         elseif msg == "options" then
             self:OpenOptions()
+        elseif msg:match("^store") then
+            Core.Store:Command(msg:match("^store%s*(.*)$"))
         elseif msg:match("^theme") then
             local want = msg:match("^theme%s+(%S+)")
             local Chrome = Core.Chrome
