@@ -109,6 +109,7 @@ function Profiles:Init(addon, savedVar, defaults)
         for _, name in ipairs(bake.restored) do if name == savedVar then baked = true end end
     end
     db.handedOver = handedOver and not baked
+    db.baked = baked
     db.charKey = self:CharKey()
     db.global  = Core.applyDefaults(sv.global, defaults.global or {})
     sv.char[db.charKey] = Core.applyDefaults(sv.char[db.charKey] or {}, defaults.char or {})

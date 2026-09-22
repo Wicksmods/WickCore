@@ -36,7 +36,11 @@ local Store = {}
 Core.Store = Store
 
 Store.PREFIX  = "WickCfg"    -- WickCfg01 .. WickCfg60
-Store.CHUNK   = 255          -- a macro body holds exactly this many
+-- 240, not 255. The macro window accepts 255 and the client writes 255
+-- to its own cache, but what comes back from the server after a restart
+-- is short by a character, and a payload cut at every chunk boundary
+-- decodes to nonsense. The Probe proved 240 round-trips a full restart.
+Store.CHUNK   = 240
 Store.MAX     = 60           -- of 120 account slots
 Store.ICON    = 134400       -- INV_Misc_QuestionMark, a fileID this client accepts
 Store.HEADER  = "WC1"
@@ -295,11 +299,24 @@ function Store:Read()
         i = i + 1
     end
     if #parts == 0 then return nil end
+    -- Every body but the last has to be a full chunk. If one is short the
+    -- client cut it, and decoding the join would blame some innocent byte
+    -- further along; say which macro and how short instead.
+    self.bodyLengths = {}
+    for i = 1, #parts do
+        self.bodyLengths[i] = #parts[i]
+        if i < #parts and #parts[i] ~= self.CHUNK then
+            self.readError = ("%s holds %d characters, expected %d: the client cut it, so the store cannot be trusted"):format(
+                nameFor(i), #parts[i], self.CHUNK)
+            return nil
+        end
+    end
     local decoded, err = self:Decode(unpackBodies(table.concat(parts)))
     if type(decoded) ~= "table" then
         self.readError = err
         return nil
     end
+    self.readError = nil
     return decoded, #parts
 end
 
@@ -471,6 +488,10 @@ function Store:RestoreFor(addon)
     local db = addon and addon.db
     local var = addon and addon.opts and addon.opts.savedVar
     if not db or not var or db.handedOver then return false end
+    -- WicksProfile put this one in place at file scope. That bake is a
+    -- deliberate recovery and wins over whatever the macros hold; the
+    -- periodic save then carries it into the macros.
+    if db.baked then return false end
     -- Keyed by addon, not by saved variable: two addons reading one
     -- variable (the harness does it; a product never should) must each
     -- be handed the table once.
@@ -642,6 +663,16 @@ end
 function Store:Save(force)
     if not self:Decide() then return false, self.reason end
     if not self.enabled then return false, self.reason end
+    -- A store that is there but would not read is the player's settings,
+    -- damaged in transit. Writing this session's defaults over it would
+    -- finish the job. Only a deliberate "store on" may do that.
+    if not force and not self.cache and next(ours()) ~= nil and not self:Read() then
+        if not self.warnedUnreadable then
+            self.warnedUnreadable = true
+            say("not saving: the settings already in your macros could not be read (" .. tostring(self.readError or "unknown") .. "). They are left as they are. /wickcore store on overwrites them on purpose.")
+        end
+        return false, "store unreadable, left alone"
+    end
     local snap, count = self:Snapshot()
     if count == 0 then return false, "nothing to save" end
     if InCombatLockdown and InCombatLockdown() then
@@ -774,5 +805,8 @@ function Store:Command(arg)
     for name in pairs(self.restored) do names[#names + 1] = name end
     table.sort(names)
     say("put back this session: " .. (#names > 0 and table.concat(names, ", ") or "nothing"))
+    if self.bodyLengths and #self.bodyLengths > 0 then
+        say("body lengths: " .. table.concat(self.bodyLengths, ", ") .. " (chunk " .. self.CHUNK .. ")")
+    end
     if self.readError then say("last read error: " .. tostring(self.readError)) end
 end
