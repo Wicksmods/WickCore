@@ -311,15 +311,19 @@ function Store:Read()
         i = i + 1
     end
     if #parts == 0 then return nil end
-    -- Every body but the last has to be a full chunk. If one is short the
-    -- client cut it, and decoding the join would blame some innocent byte
-    -- further along; say which macro and how short instead.
+    -- Every body but the last has to be the same length as the first: a
+    -- store is written in equal chunks, whatever size the version that
+    -- wrote it used, so one that differs was cut in transit and the join
+    -- would decode to nonsense somewhere later. Say which macro instead.
+    -- The current chunk size is not the test; a store written at 255 by
+    -- an earlier version has to read under 240.
     self.bodyLengths = {}
+    local chunk = #parts[1]
     for i = 1, #parts do
         self.bodyLengths[i] = #parts[i]
-        if i < #parts and #parts[i] ~= self.CHUNK then
-            self.readError = ("%s holds %d characters, expected %d: the client cut it, so the store cannot be trusted"):format(
-                nameFor(i), #parts[i], self.CHUNK)
+        if (i < #parts and #parts[i] ~= chunk) or (i == #parts and #parts[i] > chunk) then
+            self.readError = ("%s holds %d characters where the others hold %d: it was cut in transit, so the store cannot be trusted"):format(
+                nameFor(i), #parts[i], chunk)
             return nil
         end
     end

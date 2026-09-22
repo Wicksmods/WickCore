@@ -59,6 +59,14 @@ local function classAccent(token)
     return rgb(CLASS_HEX[token] or FEL.fel)
 end
 
+-- The class colour in the set the player chose, for anything in the
+-- suite that paints by class. Comforts colours health bars with this so
+-- "classic" means classic everywhere, not only in the chrome.
+function Chrome:ClassColor(token)
+    local c = classAccent(token)
+    return c[1], c[2], c[3]
+end
+
 -- The brand's darks are not the accent's hue: Fel's green sits on a deep
 -- saturated purple. Each class theme gets the same treatment, a companion
 -- hue for void, shadow and border at the brand's own saturation and
