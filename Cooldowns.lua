@@ -11,6 +11,14 @@
 -- It works in combat because it never reads a cooldown. The values come
 -- back secret and go straight into the Cooldown widget, which accepts
 -- them; nothing here compares or does arithmetic on one.
+--
+-- And nothing here is a secure button. These icons track; they do not
+-- cast. They were SecureActionButtonTemplate with type=spell, which
+-- bought a click to cast and cost the ability to change anything during
+-- a fight, because attributes on a secure button cannot be set in
+-- combat. A cooldown tracker that cannot be rebuilt in combat is the
+-- wrong way round, so the casting went and the bar can now be rebuilt,
+-- rescaled and rewrapped whenever.
 
 local ADDON = ...
 local Core = LibStub("WickCore-1.0", true)
@@ -67,6 +75,11 @@ function Proto:Store()
     end
     if s.shown == nil then s.shown = false end
     if s.locked == nil then s.locked = true end
+    -- A tracker you cannot read is no use, and one icon size does not
+    -- suit every screen.
+    if type(s.scale) ~= "number" then s.scale = 1 end
+    -- 0 means one row however long the list gets.
+    if type(s.perRow) ~= "number" then s.perRow = 0 end
     s.window = s.window or {}
     return s
 end
@@ -191,18 +204,40 @@ function Proto:Build()
     return f
 end
 
+-- A frame's point offsets are read in the frame's own scale, so a bare
+-- SetScale walks the bar across the screen. Convert the offsets by the
+-- ratio of the two scales and it stays where it was put.
+function Proto:ApplyScale(scale)
+    local f = self.frame
+    if not f then return end
+    local old = tonumber(f:GetScale()) or 1
+    if math.abs(old - scale) < 0.001 then return end
+
+    local point, rel, relPoint, x, y = f:GetPoint()
+    f:SetScale(scale)
+    if not (point and x and y) then return end
+
+    local k = old / scale
+    f:ClearAllPoints()
+    f:SetPoint(point, rel or UIParent, relPoint or point, x * k, y * k)
+    local st = self:Store()
+    if st and st.window then Chrome:SavePosition(f, st.window) end
+end
+
 function Proto:Rebuild()
     if not self.frame then return end
     local list = self:List()
+    local s = self:Store()
+    local perRow = math.max(0, math.floor(tonumber(s and s.perRow) or 0))
+    local scale = tonumber(s and s.scale) or 1
+    if scale < 0.5 then scale = 0.5 elseif scale > 2.5 then scale = 2.5 end
     self.buttons = self.buttons or {}
     local shown = 0
     for i, name in ipairs(list) do
         local b = self.buttons[i]
         if not b then
-            b = CreateFrame("Button", nil, self.frame, "SecureActionButtonTemplate")
+            b = CreateFrame("Button", nil, self.frame)
             b:SetSize(ICON, ICON)
-            b:RegisterForClicks("AnyUp", "AnyDown")
-            b:SetAttribute("type", "spell")
             Chrome:AddBorder(b)
             b.icon = b:CreateTexture(nil, "ARTWORK")
             b.icon:SetPoint("TOPLEFT", 1, -1)
@@ -215,14 +250,13 @@ function Proto:Rebuild()
             b:SetScript("OnEnter", function(self_)
                 GameTooltip:SetOwner(self_, "ANCHOR_TOP")
                 GameTooltip:SetText(self_.spellName or "?", 1, 1, 1)
-                GameTooltip:AddLine(self_.known and "Click to cast" or "Not learned yet", 0.6, 0.6, 0.6)
+                GameTooltip:AddLine(self_.known and "Tracked" or "Not learned yet", 0.6, 0.6, 0.6)
                 GameTooltip:Show()
             end)
             b:SetScript("OnLeave", function() GameTooltip:Hide() end)
             self.buttons[i] = b
         end
         b.spellName = name
-        b:SetAttribute("spell", name)
         local info = D.GetSpellInfo(name)
         b.spellID = info and info.spellID
         b.known = info ~= nil
@@ -231,12 +265,26 @@ function Proto:Rebuild()
         b.icon:SetAlpha(b.known and 1 or 0.4)
         b.label:SetText("")
         b:ClearAllPoints()
-        b:SetPoint("LEFT", self.frame, "LEFT", PAD + (i - 1) * (ICON + GAP), 0)
+        local col, row = i - 1, 0
+        if perRow > 0 then
+            col = (i - 1) % perRow
+            row = math.floor((i - 1) / perRow)
+        end
+        b:SetPoint("TOPLEFT", self.frame, "TOPLEFT",
+            PAD + col * (ICON + GAP), -(PAD + row * (ICON + GAP)))
         b:Show()
         shown = i
     end
     for i = shown + 1, #self.buttons do self.buttons[i]:Hide() end
-    self.frame:SetSize(math.max(ICON, shown * ICON + math.max(0, shown - 1) * GAP) + PAD * 2, ICON + PAD * 2)
+
+    local cols = (perRow > 0) and math.min(shown, perRow) or shown
+    local rows = (perRow > 0) and math.ceil(shown / perRow) or 1
+    self.frame:SetSize(
+        math.max(ICON, cols * ICON + math.max(0, cols - 1) * GAP) + PAD * 2,
+        math.max(ICON, rows * ICON + math.max(0, rows - 1) * GAP) + PAD * 2)
+    -- Scale rather than resize: the icons, the borders and the cooldown
+    -- swirl all move together and nothing has to be laid out twice.
+    self:ApplyScale(scale)
     self:Refresh()
 end
 
@@ -266,6 +314,28 @@ function Proto:Toggle()
     return s and s.shown
 end
 
+-- Clamped rather than refused: a number out of range is a typo, not a
+-- reason to do nothing and say nothing.
+function Proto:SetScale(v)
+    local s = self:Store()
+    v = tonumber(v)
+    if not s or not v then return nil end
+    if v < 0.5 then v = 0.5 elseif v > 2.5 then v = 2.5 end
+    s.scale = v
+    self:Rebuild()
+    return v
+end
+
+function Proto:SetPerRow(n)
+    local s = self:Store()
+    n = tonumber(n)
+    if not s or not n then return nil end
+    n = math.max(0, math.floor(n))
+    s.perRow = n
+    self:Rebuild()
+    return n
+end
+
 function Proto:SetLocked(locked)
     local s = self:Store()
     if s then s.locked = locked and true or false end
@@ -284,6 +354,12 @@ end
 
 -- The options row every product shows, so the bar is discoverable without
 -- knowing the slash command. Off until the player turns it on.
+-- One wording for both places these appear.
+local SCALE_OPTS = { step = 0.1, format = "%.1fx" }
+local ROW_OPTS = { step = 1, text = function(v)
+    return v > 0 and tostring(v) or "one row"
+end }
+
 function Proto:OptionRow(page, y)
     local O = Core.Options
     y = O:Check(page, "Show the cooldown bar",
@@ -292,6 +368,12 @@ function Proto:OptionRow(page, y)
     y = O:Check(page, "Lock the cooldown bar",
         function() return self:IsLocked() end,
         function(v) self:SetLocked(v) end, y)
+    y = O:Stepper(page, "Icon scale",
+        function() local s = self:Store(); return s and s.scale or 1 end,
+        function(v) self:SetScale(v) end, y, SCALE_OPTS)
+    y = O:Stepper(page, "Icons per row",
+        function() local s = self:Store(); return s and s.perRow or 0 end,
+        function(v) self:SetPerRow(v) end, y, ROW_OPTS)
     y = O:Note(page, "A row of icons for the spells you name, since the game's own cooldown manager is empty for some classes. Edit it with the cd command: add, remove, list, import, export, reset.", y)
     return y
 end
@@ -321,7 +403,16 @@ function Proto:AttachPane(pane)
         function(v) self:SetLocked(v) end)
     pane.lockCheck:SetPoint("TOPLEFT", 150, -30)
 
-    pane.listTop = -56
+    pane.scaleStep = Chrome:Stepper(pane, "Icon scale",
+        function() local st = self:Store(); return st and st.scale or 1 end,
+        function(v) self:SetScale(v) end, SCALE_OPTS)
+    pane.scaleStep:SetPoint("TOPLEFT", 0, -54)
+    pane.rowStep = Chrome:Stepper(pane, "Icons per row",
+        function() local st = self:Store(); return st and st.perRow or 0 end,
+        function(v) self:SetPerRow(v) end, ROW_OPTS)
+    pane.rowStep:SetPoint("TOPLEFT", 240, -54)
+
+    pane.listTop = -80
     pane.rows = {}
     pane.empty = Chrome:Text(pane, 11, C.muted)
     pane.empty:SetPoint("TOPLEFT", 0, pane.listTop)
@@ -419,12 +510,21 @@ function Proto:Command(rest)
     elseif verb == "reset" then
         self:Reset()
         A:Print("bar reset to the default for your class.")
+    elseif verb == "scale" then
+        local v = self:SetScale(arg)
+        A:Print(v and ("bar scale " .. ("%.1f"):format(v) .. "x.")
+            or "scale: give me a number between 0.5 and 2.5.")
+    elseif verb == "row" or verb == "rows" or verb == "perrow" then
+        local n = self:SetPerRow(arg)
+        A:Print(n and (n > 0 and ("wrapping every " .. n .. " icons.")
+            or "one row, however long the list gets.")
+            or "row: give me a number, or 0 for one row.")
     elseif verb == "lock" then
         self:SetLocked(true); A:Print("cooldown bar locked.")
     elseif verb == "unlock" then
         self:SetLocked(false); A:Print("cooldown bar unlocked: drag it into place, then lock.")
     else
-        A:Print("cd: toggle | add <spell> | remove <spell> | list | import | export | reset | lock | unlock")
+        A:Print("cd: toggle | add <spell> | remove <spell> | list | scale <n> | row <n> | import | export | reset | lock | unlock")
     end
     return true
 end

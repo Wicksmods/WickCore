@@ -369,6 +369,15 @@ function Options:Check(parent, label, get, set, y)
     return consume(parent, y - 22)
 end
 
+function Options:Stepper(parent, label, get, set, y, opts)
+    local c = Chrome:Stepper(parent, label, get, function(...)
+        set(...)
+        if Core.Store then Core.Store:Dirty() end
+    end, opts)
+    c:SetPoint("TOPLEFT", 0, y)
+    return consume(parent, y - 22)
+end
+
 function Options:Button(parent, text, onClick, y, width)
     local b = Chrome:Button(parent, text, width)
     b:SetPoint("TOPLEFT", 0, y)

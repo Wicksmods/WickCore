@@ -323,6 +323,54 @@ function Chrome:Check(parent, label, get, set)
     return b
 end
 
+-- Stepper: a number you nudge, for the settings a check box cannot
+-- carry. Same 220px width as Check so the two line up in a column.
+--
+-- No slider: a slider needs a drag region and a thumb texture to look
+-- like anything, and every number the suite has wanted so far has a
+-- sensible step and a small range.
+function Chrome:Stepper(parent, label, get, set, opts)
+    opts = opts or {}
+    local step = opts.step or 1
+    local b = CreateFrame("Frame", nil, parent)
+    b:SetSize(220, 18)
+    b.label = self:Text(b, 11)
+    b.label:SetPoint("LEFT", 0, 0)
+    b.label:SetText(label)
+
+    local value = self:Text(b, 11, C.fel)
+    local function refresh()
+        local v = get()
+        if v == nil then
+            value:SetText("-")
+        elseif opts.text then
+            value:SetText(opts.text(v))
+        else
+            value:SetText((opts.format or "%d"):format(v))
+        end
+    end
+
+    local minus = self:Button(b, "-", 18, 18)
+    minus:SetPoint("RIGHT", b, "RIGHT", -62, 0)
+    local plus = self:Button(b, "+", 18, 18)
+    plus:SetPoint("RIGHT", b, "RIGHT", 0, 0)
+    value:SetPoint("CENTER", minus, "RIGHT", 22, 0)
+
+    local function nudge(by)
+        local v = tonumber(get())
+        if not v then return end
+        -- The setter clamps; this only asks.
+        set(v + by)
+        refresh()
+    end
+    minus:SetScript("OnClick", function() nudge(-step) end)
+    plus:SetScript("OnClick", function() nudge(step) end)
+
+    b.Refresh = refresh
+    refresh()
+    return b
+end
+
 function Chrome:Heading(parent, text)
     local fs = self:Text(parent, 12, C.fel)
     fs:SetText(text)
