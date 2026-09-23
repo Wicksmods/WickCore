@@ -175,6 +175,124 @@ function D.IsSpellKnown(spellID, isPet)
 end
 
 -- ============================================================
+-- The spellbook
+-- ============================================================
+--
+-- Asking what the player can cast, rather than asking about a spell you
+-- already knew the name of. The mage kit needs it to find the teleports
+-- and portals a character actually has: Forever is Classic plus its own
+-- changes, so a list of cities written here would be a guess.
+--
+-- The two clients disagree about all of it. Modern has skill lines, a
+-- numeric bank enum, and getters that return a table. Legacy has tabs,
+-- the bank as the string "spell", and tuples.
+
+local numSkillLines = fn("C_SpellBook", "GetNumSpellBookSkillLines")
+local skillLineInfo = fn("C_SpellBook", "GetSpellBookSkillLineInfo")
+local bookItemInfoModern = fn("C_SpellBook", "GetSpellBookItemInfo")
+local bookItemNameModern = fn("C_SpellBook", "GetSpellBookItemName")
+local bookItemTexModern = fn("C_SpellBook", "GetSpellBookItemTexture")
+
+local numSpellTabs = glob("GetNumSpellTabs")
+local spellTabInfo = glob("GetSpellTabInfo")
+local bookItemNameLegacy = glob("GetSpellBookItemName")
+local bookItemTexLegacy = glob("GetSpellBookItemTexture")
+local bookItemInfoLegacy = glob("GetSpellBookItemInfo")
+
+chose("SpellBook", numSkillLines and bookItemNameModern,
+      numSpellTabs and bookItemNameLegacy)
+
+-- The player's own book, never the pet's.
+local function playerBank()
+    local e = rawget(_G, "Enum")
+    local bank = e and e.SpellBookSpellBank
+    -- Player is 0 on every build that has the enum; the fallback is for
+    -- one that has the functions but not the table.
+    return (bank and bank.Player) or 0
+end
+
+local function modernItem(index, bank)
+    if bookItemInfoModern then
+        local ok, t = pcall(bookItemInfoModern, index, bank)
+        if ok and type(t) == "table" and t.name then
+            return { index = index, name = t.name, rank = t.subName,
+                     icon = t.iconID, spellID = t.spellID,
+                     isPassive = t.isPassive == true }
+        end
+    end
+    local ok, name, rank = pcall(bookItemNameModern, index, bank)
+    if not ok or not name then return nil end
+    local icon
+    if bookItemTexModern then
+        local okTex, tex = pcall(bookItemTexModern, index, bank)
+        icon = okTex and tex or nil
+    end
+    return { index = index, name = name, rank = rank, icon = icon }
+end
+
+local function legacyItem(index)
+    local ok, name, rank = pcall(bookItemNameLegacy, index, "spell")
+    if not ok or not name then return nil end
+    local icon, spellID
+    if bookItemTexLegacy then
+        local okTex, tex = pcall(bookItemTexLegacy, index, "spell")
+        icon = okTex and tex or nil
+    end
+    if bookItemInfoLegacy then
+        -- (skillType, id), and the id is only a spell id for a SPELL.
+        local okInfo, kind, id = pcall(bookItemInfoLegacy, index, "spell")
+        if okInfo and kind == "SPELL" then spellID = id end
+    end
+    return { index = index, name = name, rank = rank, icon = icon, spellID = spellID }
+end
+
+-- Every spell in the player's book, in book order.
+--
+-- Ranks are left alone rather than folded together: the caller knows
+-- whether it wants one entry per rank, and a mage's teleports have no
+-- ranks anyway.
+function D.SpellBookSpells()
+    local out = {}
+    if numSkillLines and bookItemNameModern then
+        local bank = playerBank()
+        local okN, lines = pcall(numSkillLines)
+        if not okN or not lines then return out end
+        for line = 1, lines do
+            local info
+            if skillLineInfo then
+                local okLine, t = pcall(skillLineInfo, line)
+                if okLine then info = t end
+            end
+            -- A guild or off-spec line is not this character's own
+            -- casting, so it does not belong in the answer.
+            if type(info) == "table" and not info.isGuild and not info.shouldHide then
+                local offset = info.itemIndexOffset or 0
+                for i = 1, (info.numSpellBookItems or 0) do
+                    local item = modernItem(offset + i, bank)
+                    if item then out[#out + 1] = item end
+                end
+            end
+        end
+        return out
+    end
+
+    if numSpellTabs and bookItemNameLegacy then
+        local okN, tabs = pcall(numSpellTabs)
+        if not okN or not tabs then return out end
+        for tab = 1, tabs do
+            local okT, _, _, offset, count = pcall(spellTabInfo, tab)
+            if okT and count then
+                for i = 1, count do
+                    local item = legacyItem((offset or 0) + i)
+                    if item then out[#out + 1] = item end
+                end
+            end
+        end
+    end
+    return out
+end
+
+-- ============================================================
 -- Containers
 -- ============================================================
 

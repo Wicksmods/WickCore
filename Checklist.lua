@@ -49,33 +49,51 @@ local function auraPresent(names)
     return false
 end
 
--- One row per definition. state: "ok", "missing", "unknown" (restricted).
+-- Whether a definition is worth a row on this character at all.
+--
+-- Not the same question as a check returning nil. nil means the answer
+-- cannot be read right now, which is worth a grey row; `when` saying no
+-- means there is nothing here to report, and a row would be clutter
+-- that never resolves. A mage who has not learned a teleport should not
+-- carry a row about teleport reagents.
+local function applies(def)
+    if not def.when then return true end
+    local ok, v = pcall(def.when)
+    return ok and v ~= false and v ~= nil
+end
+
+local function evaluate(def, blocked)
+    local state, detail
+    if def.aura then
+        if blocked then state = "unknown"
+        else
+            local present = auraPresent(def.aura)
+            state = present == nil and "unknown" or (present and "ok" or "missing")
+        end
+    elseif def.weaponEnchant then
+        local has = hasWeaponEnchant(def.weaponEnchant)
+        state = has == nil and "unknown" or (has and "ok" or "missing")
+    elseif def.item then
+        local n = D.GetItemCount(def.item, false) or 0
+        detail = tostring(n)
+        state = n >= (def.min or 1) and "ok" or "missing"
+    elseif def.check then
+        local ok, v = pcall(def.check)
+        state = (ok and v == true) and "ok" or ((ok and v == nil) and "unknown" or "missing")
+    else
+        state = "unknown"
+    end
+    if def.known and not D.IsSpellKnown(def.known) then state = "skip" end
+    return { def = def, label = def.label, state = state, detail = detail }
+end
+
+-- One row per definition that applies. state: "ok", "missing",
+-- "unknown" (restricted), "skip" (spell not learned).
 function Proto:Evaluate()
     local rows = {}
     local blocked = R:AurasBlocked()
-    for i, def in ipairs(self.defs) do
-        local state, detail
-        if def.aura then
-            if blocked then state = "unknown"
-            else
-                local present = auraPresent(def.aura)
-                state = present == nil and "unknown" or (present and "ok" or "missing")
-            end
-        elseif def.weaponEnchant then
-            local has = hasWeaponEnchant(def.weaponEnchant)
-            state = has == nil and "unknown" or (has and "ok" or "missing")
-        elseif def.item then
-            local n = D.GetItemCount(def.item, false) or 0
-            detail = tostring(n)
-            state = n >= (def.min or 1) and "ok" or "missing"
-        elseif def.check then
-            local ok, v = pcall(def.check)
-            state = (ok and v == true) and "ok" or ((ok and v == nil) and "unknown" or "missing")
-        else
-            state = "unknown"
-        end
-        if def.known and not D.IsSpellKnown(def.known) then state = "skip" end
-        rows[i] = { def = def, label = def.label, state = state, detail = detail }
+    for _, def in ipairs(self.defs) do
+        if applies(def) then rows[#rows + 1] = evaluate(def, blocked) end
     end
     self.rows = rows
     return rows
