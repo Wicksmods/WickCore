@@ -1,3 +1,4 @@
+<p align="center"><img src="images/wick-thumb-core.png" alt="WickCore"></p>
 # WickCore
 
 > The shared platform under every Wick addon for World of Warcraft: Forever.
