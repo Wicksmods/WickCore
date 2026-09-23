@@ -159,11 +159,20 @@ function D.GetSpellCooldown(spell)
     if cdModern then
         local ok, t = pcall(cdModern, spell)
         if not ok or not t then return nil end
-        return { start = t.startTime, duration = t.duration, enabled = t.isEnabled, modRate = t.modRate }
+        -- isActive stays a plain boolean under combat restrictions
+        -- while the times go secret, so it is the one part of a
+        -- cooldown a caller may actually look at mid-fight.
+        return { start = t.startTime, duration = t.duration, enabled = t.isEnabled,
+                 modRate = t.modRate, active = t.isActive }
     elseif cdLegacy then
         local ok, start, duration, enabled, modRate = pcall(cdLegacy, spell)
         if not ok or start == nil then return nil end
-        return { start = start, duration = duration, enabled = enabled, modRate = modRate }
+        -- No isActive here, but nothing is secret either, so the same
+        -- answer can be worked out rather than left missing.
+        local active
+        if type(duration) == "number" then active = duration > 0 end
+        return { start = start, duration = duration, enabled = enabled,
+                 modRate = modRate, active = active }
     end
 end
 

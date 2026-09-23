@@ -261,8 +261,9 @@ function Proto:Rebuild()
         b.spellID = info and info.spellID
         b.known = info ~= nil
         b.icon:SetTexture((info and info.icon) or "Interface\\Icons\\INV_Misc_QuestionMark")
-        b.icon:SetDesaturated(not b.known)
-        b.icon:SetAlpha(b.known and 1 or 0.4)
+        -- Ready until a cooldown says otherwise: a freshly drawn bar
+        -- should not look as though everything is on cooldown.
+        self:SetReady(b, b.ready ~= false)
         b.label:SetText("")
         b:ClearAllPoints()
         local col, row = i - 1, 0
@@ -297,8 +298,30 @@ function Proto:Refresh()
             if cd and cd.start ~= nil and cd.duration ~= nil then
                 pcall(b.cd.SetCooldown, b.cd, cd.start, cd.duration, cd.modRate)
             end
+            -- Whether it is ready, which is the question the bar is for.
+            -- isActive survives combat as a plain boolean while the
+            -- times do not, so this reads it rather than comparing a
+            -- start against a duration, which would be reading secrets.
+            local active = cd and cd.active
+            if active ~= nil and not R:IsSecret(active) then
+                self:SetReady(b, active ~= true)
+            end
         end
     end
+end
+
+-- One place that decides how an icon looks, since three things want a
+-- say: whether the spell is learned, whether it is ready, and the
+-- redraw that happens before any cooldown has been read.
+function Proto:SetReady(b, ready)
+    if not b.known then
+        b.icon:SetDesaturated(true)
+        b.icon:SetAlpha(0.4)
+        return
+    end
+    b.ready = ready
+    b.icon:SetDesaturated(not ready)
+    b.icon:SetAlpha(ready and 1 or 0.55)
 end
 
 function Proto:SetShown(on)
