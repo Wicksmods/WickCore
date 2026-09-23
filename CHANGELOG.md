@@ -1,5 +1,15 @@
 # WickCore - Changelog
 
+## 0.9.1
+
+### Your theme stops resetting
+
+A login that read the theme before the settings had arrived fell back to
+Fel and then saved Fel over your real choice, so one early read lost the
+setting for good. On this client the settings come from the macro store,
+which can land after login, so reading nothing at login is normal and
+has to be harmless. It only writes back a choice it actually read now.
+
 ## 0.9.0
 
 One version across the suite for the Forever beta. Every addon carried a
