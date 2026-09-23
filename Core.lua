@@ -14,7 +14,7 @@ if not Core then return end
 
 Core._sourceAddon = ADDON
 Core.MAJOR, Core.MINOR = MAJOR, MINOR
-Core.VERSION = "0.4.0"
+Core.VERSION = "0.9.0"
 _G.WickCore = Core
 
 -- Persist across a same-session upgrade of the library.
