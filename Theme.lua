@@ -328,7 +328,10 @@ end
 -- Called by WickCore's own OnInitialize, before any product builds a frame.
 function Chrome:ApplySavedTheme(source)
     local global = themeStore()
-    local setting = (global and global.theme) or self.DEFAULT_THEME
+    -- Did we actually read a choice, or are we falling back? The two must
+    -- not be treated alike, because this function saves at the end.
+    local stored = global and global.theme
+    local setting = stored or self.DEFAULT_THEME
     -- Trace for /wickcore theme, so a silent failure is visible.
     self.applyLog = (self.applyLog and (self.applyLog .. ", ") or "")
         .. tostring(source or "init") .. "=" .. tostring(setting)
@@ -349,6 +352,15 @@ function Chrome:ApplySavedTheme(source)
         rebuild = true
     end
     if rebuild then buildThemes() end
-    self:SaveTheme()
+    -- Only write back a choice we actually read.
+    --
+    -- This used to save unconditionally, so a login that read nothing fell
+    -- back to Fel and then wrote Fel over the real setting: one read that
+    -- came too early turned into the choice being gone for good. On this
+    -- client the settings arrive from the macro store, which can land after
+    -- login, and Store re-applies with source "store" when it does. The
+    -- logout path has always guarded this with themeKnown; this is the same
+    -- guard at the other end.
+    if stored then self:SaveTheme() end
     self:ApplyTheme(self:ResolveTheme(setting))
 end
