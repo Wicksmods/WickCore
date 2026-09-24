@@ -172,6 +172,9 @@ function Chrome:NewPanel(name, o)
     o = o or {}
     local f = CreateFrame("Frame", name, o.parent or UIParent)
     f:SetSize(o.width or 400, o.height or 240)
+    -- Whether the player can change the size, which is what decides
+    -- whether a saved size is theirs or a stale copy of ours.
+    f.wickResizable = o.resizable and true or false
     f:SetPoint("CENTER")
     f:SetMovable(true)
     f:SetClampedToScreen(true)
@@ -265,14 +268,27 @@ end
 -- Position persistence
 -- ============================================================
 
+-- Where a window is put is the player's, always. How big it is only
+-- belongs to them when they can drag it: a panel sized in code has to
+-- come up at the size the code says, or changing a layout leaves every
+-- existing player on the old dimensions with the new contents spilling
+-- out. Wick's Gear grew a second column and opened at its old width
+-- with the paperdoll running through the button below it.
 function Chrome:SavePosition(f, db)
     local point, _, relPoint, x, y = f:GetPoint()
     db.point, db.relPoint, db.x, db.y = point, relPoint, x, y
-    db.width, db.height = f:GetWidth(), f:GetHeight()
+    if f.wickResizable then
+        db.width, db.height = f:GetWidth(), f:GetHeight()
+    else
+        -- Stop old numbers sitting there waiting to be believed again.
+        db.width, db.height = nil, nil
+    end
 end
 
 function Chrome:RestorePosition(f, db)
-    if db.width and db.height then f:SetSize(db.width, db.height) end
+    if f.wickResizable and db.width and db.height then
+        f:SetSize(db.width, db.height)
+    end
     if db.point then
         f:ClearAllPoints()
         f:SetPoint(db.point, UIParent, db.relPoint or db.point, db.x or 0, db.y or 0)
