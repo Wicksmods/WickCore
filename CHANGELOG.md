@@ -2,7 +2,17 @@
 
 ## 0.9.3 — 2026-09-24
 
-- (edit this entry with the actual changes)
+### Changed
+
+- The client keeps settings itself again, as of its 24 September patch.
+  The macro store was standing in for a client that wrote saved
+  variables and never read them back; it checks at every login, and it
+  has stood itself down. It now says so once at login while the WickCfg
+  macros it made are still there, and points at `/wickcore store off`
+  to clear them and get the macro slots back.
+- Nothing is lost by clearing them. The client always wrote saved
+  variables correctly during the beta, it only failed to read them, so
+  every addon has a current file of its own.
 
 ## 0.9.2 — 2026-09-24
 
