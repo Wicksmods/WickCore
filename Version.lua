@@ -62,6 +62,13 @@ function Version:_Schedule(delay)
 end
 
 function Version:OnMessage(prefix, text, _, sender)
+    -- Chat payloads reach a tainted addon as secret strings while the
+    -- client's restrictions are up, and a secret cannot be compared or
+    -- matched. Addon messages have not been seen to arrive that way,
+    -- but the line below compares and the one after matches, so the
+    -- same guard costs nothing and removes the whole class.
+    local R = Core.Restrict
+    if R and (R:IsSecret(prefix) or R:IsSecret(text)) then return end
     if prefix ~= self.PREFIX then return end
     local kind, name, ver = text:match("^(%a)\t([^\t]+)\t(.+)$")
     if kind ~= "V" or not name then return end
