@@ -283,6 +283,10 @@ function Chrome:SavePosition(f, db)
         -- Stop old numbers sitting there waiting to be believed again.
         db.width, db.height = nil, nil
     end
+    -- Same as a theme: where a window sits is a setting, and on this
+    -- client a setting the store has not been told about is gone at the
+    -- next login.
+    if Core.Store then Core.Store:Dirty() end
 end
 
 function Chrome:RestorePosition(f, db)

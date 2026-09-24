@@ -240,6 +240,12 @@ function Chrome:SaveTheme()
     g.theme = self.themeSetting
     g.classColors = self.classColorSet
     g.custom = { main = self.customColors.main, accent = self.customColors.accent }
+    -- The saved variable is written and never read back by this client,
+    -- so the choice only survives if the macro store writes it too, and
+    -- the store writes when something says it is dirty. Nothing did:
+    -- the options page marks its own check boxes and a theme is picked
+    -- from a list somewhere else entirely.
+    if Core.Store then Core.Store:Dirty() end
     return true
 end
 
