@@ -2,7 +2,26 @@
 
 ## 0.9.2 — 2026-09-24
 
-- (edit this entry with the actual changes)
+### Changed
+
+- The cooldown bar tracks rather than casts. It was built out of secure
+  cast buttons, which cannot be changed during a fight, which is when a
+  cooldown tracker is worth having. Clicking an icon no longer casts.
+- The bar has a scale and a row width, and anything on cooldown dims,
+  so it answers at a glance the question it exists for.
+- A checklist row can say it does not apply to this character, instead
+  of sitting grey forever next to something you will never have.
+
+### Fixed
+
+- Settings changed outside the options page are kept. Picking a theme
+  or dragging a window wrote the setting and never told the part of
+  WickCore that survives a restart, so your theme came back to the old
+  one at the next login.
+- A window sized in code opens at the size the code says. A size saved
+  under an older layout was being restored over it.
+- The version handler no longer compares a chat payload the client has
+  marked unreadable.
 
 ## 0.9.1
 
