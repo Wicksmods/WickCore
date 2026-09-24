@@ -51,21 +51,52 @@ for name, tbl in pairs(Chrome.Colors) do TOKEN_OF[tbl] = name end
 local tinted = setmetatable({}, { __mode = "k" })
 
 -- Register a region a product painted itself. kind: "texture" or "text".
-function Chrome:Register(region, token, kind)
-    if type(token) == "table" then token = TOKEN_OF[token] end
+function Chrome:Register(region, token, kind, alpha)
+    if type(token) == "table" then
+        -- A derived table keeps its own alpha; a token's alpha is part
+        -- of the token.
+        if alpha == nil and TOKEN_OF[token] and token[4] ~= (C[TOKEN_OF[token]] or {})[4] then
+            alpha = token[4]
+        end
+        token = TOKEN_OF[token]
+    end
     if not token or not C[token] then return region end
-    tinted[region] = { token = token, kind = kind or "texture" }
+    tinted[region] = { token = token, kind = kind or "texture", alpha = alpha }
     return region
 end
 
+-- A colour derived from a token at another alpha: a hover wash, a
+-- selection fill. Kept and refreshed on a theme change, and treated as a
+-- token by Register, so a product paints with it exactly as it would
+-- paint with Chrome.Colors.fel.
+local derived = {}
+function Chrome:Wash(token, alpha)
+    if type(token) == "table" then token = TOKEN_OF[token] end
+    local src = token and C[token]
+    if not src then return { 0, 0, 0, alpha or 1 } end
+    local t = { src[1], src[2], src[3], alpha or 1 }
+    derived[#derived + 1] = { color = t, token = token }
+    TOKEN_OF[t] = token
+    return t
+end
+
 function Chrome:Retint()
+    -- The derived tables first, so a region registered with one is
+    -- repainted from numbers that are already current.
+    for _, d in ipairs(derived) do
+        local src = C[d.token]
+        if src then
+            d.color[1], d.color[2], d.color[3] = src[1], src[2], src[3]
+        end
+    end
     for region, info in pairs(tinted) do
         local c = C[info.token]
         if c then
+            local a = info.alpha or c[4] or 1
             if info.kind == "text" then
-                if region.SetTextColor then region:SetTextColor(c[1], c[2], c[3], c[4] or 1) end
+                if region.SetTextColor then region:SetTextColor(c[1], c[2], c[3], a) end
             elseif region.SetColorTexture then
-                region:SetColorTexture(c[1], c[2], c[3], c[4] or 1)
+                region:SetColorTexture(c[1], c[2], c[3], a)
             end
         end
     end
@@ -79,7 +110,9 @@ function Chrome:Texture(parent, layer, color)
     local t = parent:CreateTexture(nil, layer or "BACKGROUND")
     if color then
         t:SetColorTexture(color[1], color[2], color[3], color[4] or 1)
-        if TOKEN_OF[color] then tinted[t] = { token = TOKEN_OF[color], kind = "texture" } end
+        -- Through Register, so the rule about a derived colour
+        -- keeping its own alpha is written once.
+        Chrome:Register(t, color, "texture")
     end
     return t
 end
@@ -89,7 +122,7 @@ function Chrome:Text(parent, size, color, flags)
     fs:SetFont(self.FONT, size or 12, flags or "")
     color = color or C.text
     fs:SetTextColor(color[1], color[2], color[3], color[4] or 1)
-    if TOKEN_OF[color] then tinted[fs] = { token = TOKEN_OF[color], kind = "text" } end
+    Chrome:Register(fs, color, "text")
     return fs
 end
 
