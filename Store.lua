@@ -805,6 +805,12 @@ function Store:Announce()
     if not self.enabled then
         if self:Needed() then
             say("this client hands no settings back at load. /wickcore store on keeps them in a handful of macros; nothing is written until you ask.")
+        elseif next(ours()) ~= nil then
+            -- The client is keeping settings itself now, which is what
+            -- this was standing in for. Saying nothing would leave a
+            -- player with macros they opted into, no longer used, and
+            -- no hint that the thing they turned on has stood down.
+            say("this client is keeping settings itself now, so the macro store has stood down. Your Wick settings are being saved the normal way. /wickcore store off clears the WickCfg macros it left behind.")
         end
         return
     end
