@@ -65,6 +65,21 @@ function D.GetItemInfoInstant(item)
              icon = icon, classID = classID, subclassID = subclassID }
 end
 
+-- The name alone, which this client will give for an item it has
+-- never sent, where the full GetItemInfo will not. On the older client
+-- there is no such shortcut, so the full one answers instead.
+local itemNameByID = fn("C_Item", "GetItemNameByID")
+function D.GetItemNameByID(id)
+    if id == nil then return nil end
+    if itemNameByID then
+        local ok, n = pcall(itemNameByID, id)
+        if ok and type(n) == "string" and n ~= "" then return n end
+        return nil
+    end
+    local t = D.GetItemInfo(id)
+    return t and t.name
+end
+
 local itemCount = chose("GetItemCount", fn("C_Item", "GetItemCount"), glob("GetItemCount"))
 function D.GetItemCount(item, includeBank, includeUses)
     if not itemCount or item == nil then return 0 end
